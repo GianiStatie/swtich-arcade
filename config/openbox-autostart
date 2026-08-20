@@ -1,0 +1,24 @@
+# Openbox autostart for arcade brain
+xsetroot -solid black &
+
+# Idempotent: only start each helper if it isn't already running (guards
+# against stale instances surviving an sddm/Openbox restart). The bracket
+# trick ("[e]xit") keeps pgrep from matching this autostart shell itself.
+start_once() {
+  local script="$1"
+  shift
+  if ! pgrep -f "[s]cripts/${script}" >/dev/null 2>&1; then
+    setsid "$@" "/home/tagap/scripts/${script}" </dev/null >/dev/null 2>&1 &
+    disown 2>/dev/null || true
+  fi
+}
+
+/home/tagap/scripts/arcade-perf-mode.sh &
+start_once exit-server.py python3 -u
+start_once gamepad-bridge.py python3 -u
+start_once uimode-watcher.py python3 -u
+# Reset UI mode to kiosk on every fresh session, then launch ES (which toggles
+# the RetroPie system's visibility to match). The Konami code unlocks Full mode
+# for the session; the next session start re-locks it here.
+sed -i 's|<string name="UIMode" value="[^"]*"|<string name="UIMode" value="kiosk"|' ~/.emulationstation/es_settings.cfg 2>/dev/null || true
+/home/tagap/scripts/launch-es.sh

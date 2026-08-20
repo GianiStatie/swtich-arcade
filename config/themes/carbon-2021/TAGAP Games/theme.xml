@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<theme>
+	<formatVersion>6</formatVersion>
+	<resolution>1920 1080</resolution>
+
+	<include>./../theme.xml</include>
+
+	<variables>
+		<themeColor>${colorOrange}</themeColor>
+	</variables>
+
+	<view name="system">
+		<image name="logo">
+			<path>./art/tagap.png</path>
+			<maxSize>576 134</maxSize>
+			<pos>960 540</pos>
+			<origin>0.5 0.5</origin>
+		</image>
+		<text name="logoText">
+			<visible>false</visible>
+		</text>
+	</view>
+
+	<view name="basic, detailed, video, grid">
+		<image name="logo">
+			<path>./art/tagap.png</path>
+			<maxSize>576 134</maxSize>
+			<pos>480 87</pos>
+			<origin>0.5 0.5</origin>
+		</image>
+		<text name="logoText">
+			<visible>false</visible>
+		</text>
+	</view>
+</theme>

@@ -1,0 +1,27 @@
+# itch.io games sync config
+#
+# List of web games to pull onto the arcade. Each entry must provide a direct
+# download link to a ZIP containing the web build at its root (index.html).
+#
+# IMPORTANT: If a game has no downloadable web build (e.g. it's "Play in
+# browser" only with no web.zip file), it is NOT supported by the arcade —
+# we cannot pull it. Only games with a downloadable web build appear here.
+#
+# Format:
+#   - name: <display name shown in EmulationStation>
+#     zip:  <direct https URL  OR  a local glob like "dragon-jump-web.zip">
+#     itch: <optional game slug to auto-fetch the zip via the itch API>
+#
+# The `zip` value can be either:
+#   1. A direct HTTPS URL (curl download).
+#   2. A glob pattern (e.g. "dragon-jump-web.zip") matched against
+#      ~/arcade_games/downloads/ (newest match wins).
+#
+# If `itch` is set and no matching file is in ~/arcade_games/downloads/, the
+# sync script auto-downloads the upload from itch.io using the API key in
+# ~/.config/itch_api_key (see scripts/download-from-itch.sh).
+
+games:
+  - name: "Dragon Jump"
+    zip: "dragon-jump-web.zip"
+    itch: "dragon-jump"
