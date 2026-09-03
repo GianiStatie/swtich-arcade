@@ -50,10 +50,12 @@ them in Chromium kiosk mode via EmulationStation.
 ### 1. Connect over USB
 
 The Switch boots into L4T and connects to the PC via USB gadget networking.
-On the PC, assign the USB interface IP (it drops on reconnect):
+The link is **fully static and persistent** (see
+[Troubleshooting](troubleshooting.md#usb-ip-drops-on-reconnect) for details):
+Switch = `192.168.55.1`, PC = `192.168.55.100` (NetworkManager connection
+`Wired connection 3`, manual method). No manual IP setup needed. Quick check:
 
 ```bash
-sudo ip addr add 192.168.55.100/24 dev enp12s0f3u1u2i5
 ping 192.168.55.1
 ```
 
@@ -75,11 +77,15 @@ ssh switch 'sudo apt-get update && sudo apt-get install -y openssh-server && sud
 
 ### 3. Share internet over USB
 
-On the PC (enable forwarding + NAT):
+Done persistently (see
+[Troubleshooting](troubleshooting.md#usb-ip-drops-on-reconnect) — sysctl
+drop-in + firewalld masquerade on the PC). Only needed if rebuilding a PC
+from scratch:
 
 ```bash
-sudo sysctl -w net.ipv4.ip_forward=1
-sudo iptables -t nat -A POSTROUTING -s 192.168.55.0/24 -o enp5s0 -j MASQUERADE
+printf 'net.ipv4.ip_forward = 1\n' | sudo tee /etc/sysctl.d/99-arcade-usb-forward.conf
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --add-masquerade
+sudo firewall-cmd --reload
 ```
 
 On the Switch (default route + DNS):

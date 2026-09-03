@@ -65,11 +65,41 @@ du -sh ~/.cache/arcade/chrome_profile/ShaderCache
 
 ## USB IP drops on reconnect
 
-The USB interface IP is dropped on reconnect. Re-add it:
+**Fixed (2026-09-03).** The IP is now static and survives reconnects and reboots
+on both sides — no manual commands needed:
+
+- **Switch side** is static by design: NVIDIA's `l4t-usb-device-mode` service
+  always assigns `192.168.55.1` to the Switch, DHCP-leases exactly
+  `192.168.55.100` to the PC (single-address pool in
+  `/opt/nvidia/l4t-usb-device-mode/dhcpd.conf`), and auto-adds the default
+  route via `.100`.
+- **PC side** uses a static NetworkManager connection: `Wired connection 3` is
+  bound to the USB interface with `ipv4.method=manual`,
+  `ipv4.addresses=192.168.55.100/24` (set via
+  `nmcli connection modify "Wired connection 3" ...`). Previously it was DHCP
+  autoconnect, which wiped the manually added IP on every reconnect — that was
+  the cause of this issue.
+
+### Internet sharing for the Switch (OTA updates)
+
+The Switch routes its traffic through the PC (`default via 192.168.55.100`),
+so the PC must forward + NAT. Made persistent on 2026-09-03:
+
+- `/etc/sysctl.d/99-arcade-usb-forward.conf` sets `net.ipv4.ip_forward = 1`.
+- firewalld masquerade on the default zone:
+  `firewall-cmd --permanent --zone=FedoraWorkstation --add-masquerade`.
+  (Do NOT also add a manual `iptables -t nat` MASQUERADE rule — firewalld
+  reloads wipe those; the firewalld-native setting survives.)
+
+If the Switch has no internet, check on the PC:
 
 ```bash
-sudo ip addr add 192.168.55.100/24 dev enp12s0f3u1u2i5
+sysctl net.ipv4.ip_forward                       # must be 1
+firewall-cmd --zone=FedoraWorkstation --query-masquerade   # must be yes
+nmcli -f ipv4.method,ipv4.addresses connection show "Wired connection 3"
 ```
+
+Then on the Switch: `ping 8.8.8.8` and `curl -m 8 https://itch.io`.
 
 ## Can't exit a web game
 
