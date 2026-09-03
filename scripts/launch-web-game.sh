@@ -31,8 +31,21 @@ fi
 # Godot/Unity web builds load their assets (index.pck, .wasm) via fetch()/
 # XHR, which the browser blocks under file:// ("failed to fetch"). Serve the
 # game over HTTP from a local loopback server instead.
+#
+# webgame-server.py sends no-store cache headers; plain `http.server` does not,
+# and Chromium's heuristic caching then serves stale pck/wasm after updates.
 PORT="${WEBGAME_PORT:-8124}"
-if command -v python3 >/dev/null 2>&1; then
+if [[ -x "${GAME_DIR%/*}/../scripts/webgame-server.py" ]]; then
+  SERVER_SCRIPT="${GAME_DIR%/*}/../scripts/webgame-server.py"
+elif [[ -x "/home/tagap/scripts/webgame-server.py" ]]; then
+  SERVER_SCRIPT="/home/tagap/scripts/webgame-server.py"
+fi
+
+if [[ -n "${SERVER_SCRIPT:-}" ]]; then
+  python3 "${SERVER_SCRIPT}" "${PORT}" "${GAME_DIR}" \
+    >/tmp/webgame_server.log 2>&1 &
+  SERVER_PID=$!
+elif command -v python3 >/dev/null 2>&1; then
   python3 -m http.server "${PORT}" --directory "${GAME_DIR}" \
     >/tmp/webgame_server.log 2>&1 &
   SERVER_PID=$!
