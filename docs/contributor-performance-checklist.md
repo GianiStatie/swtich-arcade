@@ -49,6 +49,11 @@ quit path too (§5).
 - Few, small sprite atlases instead of many individual images; don't embed big
   assets as base64 in the HTML.
 - Cap your FPS target if the game logic permits (a solid 30 beats a flaky 60).
+- **Scene/level switches are synchronous on the main thread** — loading, unloading,
+  and instantiating a level does not parallelize across threads. Hide heavy rebuilds
+  behind a cover (a wipe/fade) and/or chunk the work across frames; otherwise the
+  player sees a multi-frame freeze on every switch. (Measured on the arcade's Tegra:
+  threads alone do not fix this.)
 - Test the way it will be played: 720p canvas, keyboard-only, no mouse.
 - Expect the **first launch after an update to be slower** — shaders and the
   browser's WASM code cache start cold. The arcade pre-warms new games after
@@ -72,9 +77,9 @@ Export preset (Web platform) + project settings:
   threads, web exports fall back to "Sample" audio, where effects (reverb, doppler,
   procedural audio) are unsupported.
   - Threaded exports require the server to send cross-origin isolation headers
-    (`COOP`/`COEP`). The arcade's local server will provide them (tracked in the
-    [performance plan](switch-arcade-perf-plan.md)); until it does, a threaded build
-    will refuse to start there.
+    (`COOP`/`COEP`). The arcade's local server sends them (implemented 2026-10-12;
+    live on the test Switch, production rollout pending) — without them a threaded
+    build refuses to start.
   - A threaded export also needs a **threaded export template**. Official templates
     are threaded; if you use a custom template (e.g. an encrypted build), rebuild it
     with threads enabled. Godot exports automatically pick the matching template
@@ -90,7 +95,9 @@ Export preset (Web platform) + project settings:
 - Optional, to shrink the engine payload:
   - The built-in presets have no compression option, but the **"Minimize Web
     Build" addon** (Asset Library, Godot 4.3+) recompresses `.pck`/`.wasm`.
-    The arcade also precompresses on its side, so this is a nice-to-have.
+    The arcade server serves pre-compressed `.br`/`.gz` sidecars if your zip ships
+    them (compressing arbitrary games arcade-side is still an open tier-2 item), so
+    this is a nice-to-have.
   - Advanced: a custom export template compiled with unused engine features
     disabled can cut the WASM size dramatically (see the Godot docs,
     "Optimizing a build for size").

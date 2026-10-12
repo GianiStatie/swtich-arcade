@@ -17,8 +17,8 @@ pulled from itch.io.
 
 | Tier | Scope | Implemented in | Effort | Status |
 |---|---|---|---|---|
-| **1. Game build** | What the exported game does (resolution, threading, flags, exit path) | Each game's repo (for us: `dragon-jump-remaster`) | Contributor-side; some steps need a template rebuild | Quit path + threads implemented (2026-10-12); cabinet verification pending |
-| **2. Arcade launch** | Hardware clocks, local server, Chromium flags, cache warm-up | This repo (scripts + config) | Host-side, ~a day | Server patch implemented; deploy to cabinet pending (see below) |
+| **1. Game build** | What the exported game does (resolution, threading, flags, exit path) | Each game's repo (for us: `dragon-jump-remaster`) | Contributor-side; some steps need a template rebuild | Quit + threads verified on the canary Switch (2026-10-12); scene-switch rebuilds covered (game repo `arcade-improvements`); production cabinet verification pending |
+| **2. Arcade launch** | Hardware clocks, local server, Chromium flags, cache warm-up | This repo (scripts + config) | Host-side, ~a day | Server patch live on the canary Switch (2026-10-12); production cabinet + cache/range open (see below) |
 | **3. Native ARM tier** | Run Godot web exports on a native ARM64 Godot template (reused `.pck`) | This repo (launcher + template cache) | Multi-day, Godot-only | Design: [native-arm-tier.md](native-arm-tier.md) |
 
 Sequencing: **2 → 1 → 3.** Tier 2's server headers unblock tier 1's threads; tier 1
@@ -55,11 +55,21 @@ Worked example — Dragon Jump (Godot 4.6, encrypted web export):
   (`build-web-template.yml`: stripped, encrypted, Emscripten 4.0.11) and published as
   `web_release.zip`; `build.yml` injects it and `variant/thread_support=true`. The
   remaining chain:
-  1. Deploy the tier-2 server patch to the cabinet (COOP/COEP are what make threads boot).
+  1. ~~Deploy the tier-2 server patch~~ — done on the canary Switch (2026-10-12);
+     the production cabinet is still pending.
   2. itch.io build: Embed Options → SharedArrayBuffer support (moves it to
      `html.itch.zone`; old local saves don't follow).
-  3. Verify: boot + frame time on the cabinet.
+  3. Verify on the production cabinet (canary verified: threaded build boots,
+     sprites render, scene transitions covered).
   Rollback: flip `variant/thread_support=false` — the nothreads template is still injected.
+- **Scene/level switches are main-thread work** (2026-10-12). Threads parallelize
+  engine internals, not level teardown/rebuild: a switch synchronously clears and
+  reconstructs the level (terrain, objects, secrets, decorations, pathfinding) and
+  stutters without a cover. Game-side fix (branch `arcade-improvements`): in-place
+  switches run behind the transition wipe and scene loading uses
+  `load_threaded_request` on the threaded web build (`OS.has_feature("threads")`;
+  the old code disabled threaded loads on all web builds). Contributor guidance in
+  [contributor-performance-checklist.md](contributor-performance-checklist.md) §3.
 - **VRAM texture compression flags** (`for_desktop=false, for_mobile=true`): a no-op
   for this game — no texture uses VRAM-compressed import mode. (The checklist's
   recommendation of Desktop ON / Mobile OFF stands for future VRAM-compressed art.)
@@ -91,7 +101,17 @@ All items must gracefully fall back to today's behavior if anything fails.
   every response sends COOP/COEP, `.wasm`/`.pck` get correct MIME types, and
   `.br`/`.gz` sidecar files (shipped inside the game's zip by the game repo's CI —
   the Switch never compresses anything) are served with `Content-Encoding` +
-  `Vary: Accept-Encoding`. Implemented; pending deploy to the cabinet.
+  `Vary: Accept-Encoding`.
+  - **Deployed to the canary Switch** (2026-10-12): scp'd to `~/scripts/`, old copy
+    kept as `webgame-server.py.bak-20261012`. The server is started per game launch
+    (`launch-web-game.sh`), so the new file takes effect on the next launch — no
+    service to restart. Test vehicle: a sideloaded `Dragon Jump Threads` entry in
+    `~/arcade_games/web/`, next to the old build. Verified: COOP/COEP on every
+    response, `index.wasm` as `application/wasm` + `Content-Encoding: br`
+    (4.3 MB vs 25.8 MB raw). `.pck` sidecars are skipped — the encrypted pck is
+    incompressible (its brotli sidecar was +12 bytes); the game's CI compresses
+    only wasm/js.
+  - Production cabinet still pending.
 
 ### Open items
 
