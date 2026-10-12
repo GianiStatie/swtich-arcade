@@ -12,6 +12,9 @@ kiosk, force-quit mechanism).
 
 - [Web Games setup](web-games-setup.md) — what was set up and how to reproduce it.
 - [Troubleshooting](troubleshooting.md) — WebGL context loss, shader-cache delay, exit issues, and other fixes.
+- [Performance plan](switch-arcade-perf-plan.md) — the three tiers: game build, arcade launch, native ARM.
+- [Native ARM tier](native-arm-tier.md) — running Godot web exports natively (design).
+- [Contributor performance checklist](contributor-performance-checklist.md) — shareable guidance for people shipping games.
 
 ## Deployed files
 
@@ -22,9 +25,11 @@ kiosk, force-quit mechanism).
 | `scripts/launch-web-game.sh` | `~/scripts/launch-web-game.sh` | Launch a web game in Chromium kiosk |
 | `scripts/exit-server.py` | `~/scripts/exit-server.py` | HTTP on `:8123`; powers in-game Quit buttons (`/exit`) |
 | `scripts/exit-to-es.sh` | `~/scripts/exit-to-es.sh` | Kill Chromium + relaunch ES |
-| `scripts/gamepad-bridge.py` | `~/scripts/gamepad-bridge.py` | Joy-Con → keyboard bridge (D-pad/buttons) + Start+Select force-quit |
-| `scripts/sync-itch-games.sh` | `~/scripts/sync-itch-games.sh` | Pull games from `itch-games.yaml` |
+| `scripts/gamepad-bridge.py` | `~/scripts/gamepad-bridge.py` | Joy-Con → keyboard bridge + Start+Select force-quit + Start+Select+B panic reboot |
+| `scripts/sync-itch-games.sh` | `~/scripts/sync-itch-games.sh` | Manual re-sync of games from `itch-games.yaml` (fallback) |
 | `scripts/download-from-itch.sh` | `~/scripts/download-from-itch.sh` | Fetch a named upload from itch.io via API |
+| `scripts/itch-watcher.py` | `~/scripts/itch-watcher.py` | Poll the itch collection; auto-install updates / prune / restart ES |
+| `config/systemd/user/itch-watcher.service` | `~/.config/systemd/user/itch-watcher.service` | User service running the watcher (enabled + linger) |
 | `scripts/arcade-perf-mode.sh` | `~/scripts/arcade-perf-mode.sh` | nvpmodel + CPU governor to performance |
 | `config/itch-games.yaml` | `~/arcade_games/itch-games.yaml` | List of games to pull |
 | `config/openbox-autostart` | `~/.config/openbox/autostart` | Openbox session autostart (perf + exit-server + gamepad-bridge + uimode-watcher + ES via launch-es.sh) |
@@ -47,13 +52,22 @@ kiosk, force-quit mechanism).
 ## Quick reference
 
 - **SSH:** `ssh switch` (user `tagap`, key-based, over USB gadget networking).
-- **Add a game:** edit `config/itch-games.yaml`, then run
+  - USB link fix (Oct 6): the gadget interface name can change between ports
+    (`enp7s0f3u2` on the current dock port); when a new default
+    `Wired connection N` sticks in DHCP, set it static:
+    `nmcli con mod "Wired connection 4" ipv4.method manual ipv4.addresses 192.168.55.100/24`
+- **Add a game:** add it to the itch.io collection (e.g. *LimitTestArcade*,
+  id 8014540) — the watcher installs it within ~1 minute of the next idle
+  poll and restarts ES. No SSH needed.
+- **Update a game:** re-upload the web.zip on itch.io — same flow as adding.
+- **Manual sync fallback:** edit `config/itch-games.yaml`, run
   `~/scripts/sync-itch-games.sh --restart-es` on the Switch.
 - **Controls in games:** the Joy-Cons are read by `gamepad-bridge.py` and
   injected as keyboard keys (D-pad → arrows, A → Space, B → R). See
   [Web Games setup](web-games-setup.md) for the mapping.
 - **Exit a game:** press **Start + Select** (handled by the gamepad bridge,
-  works for any game). The in-game QUIT button does **not** work for Godot web
+  works for any game). If the game is frozen solid, **Start + Select + B**
+  reboots the cabinet. The in-game QUIT button does **not** work for Godot web
   builds — see [Troubleshooting](troubleshooting.md) for why.
 - **Shader cache:** persisted at `~/.cache/arcade/` (shared across all web games).
 - **Display:** sddm autologin → Openbox → ES (no desktop shell).
