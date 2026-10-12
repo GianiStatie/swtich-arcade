@@ -18,6 +18,10 @@ Key design:
 
 Usage: gamepad-bridge.py   (runs forever; SIGTERM/SIGINT to stop)
 Requires: python3-evdev, /dev/uinput writable (tagap is in the 'input' group).
+
+Panic combos (work even when the game/X are frozen):
+  Start + Select     exit game back to EmulationStation
+  Start + Select + B reboot the cabinet
 """
 import select
 import signal
@@ -58,7 +62,13 @@ STICK_RANGE = 32767
 
 START_BUTTON = 315  # BTN_START
 SELECT_BUTTON = 314 # BTN_SELECT
+RESET_BUTTON = 305  # BTN_EAST (B) — also the third panic button
 QUIT_SCRIPT = "/home/tagap/scripts/exit-to-es.sh"
+
+# Panic combos (state-based; work even when the game/X/GPU are frozen,
+# because we read evdev directly):
+#   Start + Select      -> exit the game to EmulationStation (exit-to-es.sh)
+#   Start + Select + B  -> reboot the cabinet (sudo -n systemctl reboot)
 
 # ----------------------------------------------------------------------------
 
@@ -82,6 +92,14 @@ def _find_controller():
 def _exit_game():
     subprocess.Popen([QUIT_SCRIPT],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _reboot():
+    """Hard escape: reboot the cabinet (passwordless sudo drop-in installed)."""
+    print("Panic reboot combo (Start+Select+B); rebooting cabinet.", flush=True)
+    subprocess.Popen(
+        ["sudo", "-n", "systemctl", "reboot"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _emit_key(ui, keycode, value):
@@ -115,22 +133,40 @@ def _chromium_running():
     return _chromium_cache
 
 
-def _process_event(event, ui, held_keys, start_held, select_held):
-    """Handle one event; returns (changed_start_held, changed_select_held)."""
+def _process_event(event, ui, held_keys, buttons):
+    """Handle one event; returns True when the game session should end.
+
+    `buttons` is a dict of the panic-combo button hold states:
+    start / select / reset (True while physically held).
+    Combos:
+      Start+Select        (on the press that completes the pair)
+      Start+Select+B      (B press while the pair is held -> hard reboot)
+    """
     if event.type == ecodes.EV_KEY:
         code, value = event.code, event.value
-        # Quit combo: Start + Select together.
         if code == START_BUTTON:
-            start_held = (value == 1)
+            buttons["start"] = (value == 1)
         elif code == SELECT_BUTTON:
-            select_held = (value == 1)
-        if value == 1 and start_held and select_held:
+            buttons["select"] = (value == 1)
+        elif code == RESET_BUTTON:
+            buttons["reset"] = (value == 1)
+            # B is also the games' reset key — only block it while a panic
+            # combo is armed (Start+Select held), otherwise pass it through.
+            if value == 1 and buttons["start"] and buttons["select"]:
+                _reboot()
+                return True
+        if value == 1 and buttons["start"] and buttons["select"] \
+                and code != RESET_BUTTON:
             print("Quit combo pressed; exiting game.", flush=True)
             _exit_game()
-            return start_held, select_held, True
+            return True
 
         key = BTN_TO_KEY.get(code)
         if key is not None:
+            # While Start+Select are held (combo armed) suppress normal keys
+            # so the menu doesn't receive spurious input mid-combo.
+            if buttons["start"] and buttons["select"]:
+                return False
             if value == 1:
                 if key not in held_keys:
                     _emit_key(ui, key, 1)
@@ -142,7 +178,7 @@ def _process_event(event, ui, held_keys, start_held, select_held):
     elif event.type == ecodes.EV_ABS:
         code, value = event.code, event.value
         if code not in STICK_AXES:
-            return start_held, select_held, False
+            return False
         # Determine the digital direction this axis value maps to.
         target = None
         if value < -STICK_DEADZONE * STICK_RANGE:
@@ -169,17 +205,16 @@ def _process_event(event, ui, held_keys, start_held, select_held):
             _emit_key(ui, target, 1)
             held_keys.add(target)
 
-    return start_held, select_held, False
+    return False
 
 
 def _inject_events(ui, dev):
     """Read events from `dev` (exclusively grabbed) and inject keyboard keys.
     Uses select() with a short timeout so Chromium exit is noticed even when no
     events arrive; batches all pending events per wakeup (no per-event fork).
-    Runs until Chromium exits or Start+Select is pressed."""
+    Runs until Chromium exits or a panic combo ends the session."""
     held_keys = set()
-    start_held = False
-    select_held = False
+    buttons = {"start": False, "select": False, "reset": False}
 
     while _keep_running and _chromium_running():
         # Block up to 0.5s for events; also lets us re-check Chromium state.
@@ -192,9 +227,7 @@ def _inject_events(ui, dev):
         for event in events:
             if not _keep_running:
                 return
-            start_held, select_held, quit = _process_event(
-                event, ui, held_keys, start_held, select_held)
-            if quit:
+            if _process_event(event, ui, held_keys, buttons):
                 return
 
     # Release anything still held before returning to the menu watch.

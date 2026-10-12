@@ -66,6 +66,7 @@ games should use standard keyboard input. Default mapping:
 | X | Esc |
 | Y | Tab |
 | Start + Select | Exit game (returns to menu) |
+| Start + Select + B | Panic reboot (if the game is frozen) |
 
 The 2 extra custom buttons are unassigned by default — they can be mapped to
 any key per game if needed.
@@ -85,8 +86,12 @@ runs. Confirm the build has `index.html` at the root of the zip.
 
 ### 2. Add it to the arcade
 
-Add an entry to `config/itch-games.yaml` (or a direct zip URL), then sync to
-both units:
+Add the game to the itch.io collection (e.g. *LimitTestArcade*). The cabinet
+polls the collection every minute and installs new/updated builds
+automatically whenever nobody is playing; no SSH or manual sync is needed.
+
+Manual fallback: add an entry to `config/itch-games.yaml` (or a direct zip
+URL), then sync to both units:
 
 ```bash
 ~/scripts/sync-itch-games.sh --restart-es
@@ -104,7 +109,8 @@ The game appears in the **TAGAP Games** section of EmulationStation.
 
 ## Quick reference
 
-- **Add a game:** edit `config/itch-games.yaml`, run `sync-itch-games.sh --restart-es`.
+- **Add a game:** add it to the itch.io collection (auto-installs ≤1 min,
+  while idle). Or: edit `itch-games.yaml`, run `sync-itch-games.sh --restart-es`.
 - **Exit a game:** Start + Select (any game).
 - **Troubleshooting:** see `docs/troubleshooting.md` (WebGL context loss, input
   lag, cursor, exit issues).

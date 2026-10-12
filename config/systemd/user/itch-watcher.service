@@ -1,0 +1,15 @@
+[Unit]
+Description=itch.io collection watcher (arcade auto-update)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -u /home/tagap/scripts/itch-watcher.py
+StandardOutput=append:/home/tagap/arcade_games/itch-watcher.log
+StandardError=inherit
+Restart=on-failure
+RestartSec=15
+Environment=GAMES_ROOT=/home/tagap/arcade_games
+
+[Install]
+WantedBy=default.target

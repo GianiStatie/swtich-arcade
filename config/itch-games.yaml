@@ -1,27 +1,33 @@
-# itch.io games sync config
+# itch.io collection sync config for the arcade watcher
 #
-# List of web games to pull onto the arcade. Each entry must provide a direct
-# download link to a ZIP containing the web build at its root (index.html).
+# The watcher (scripts/itch-watcher.py on the Switch) polls one itch.io
+# collection every `poll_seconds` and mirrors it onto the cabinet:
+#   * game added to the collection      -> installed within a minute
+#   * game's web build re-uploaded      -> re-downloaded (md5 changed)
+#   * game removed from the collection  -> uninstalled (prune: true)
+# Changes are applied only while no game is running (Chromium closed);
+# EmulationStation is restarted afterwards so the menu refreshes.
 #
-# IMPORTANT: If a game has no downloadable web build (e.g. it's "Play in
-# browser" only with no web.zip file), it is NOT supported by the arcade —
-# we cannot pull it. Only games with a downloadable web build appear here.
-#
-# Format:
-#   - name: <display name shown in EmulationStation>
-#     zip:  <direct https URL  OR  a local glob like "dragon-jump-web.zip">
-#     itch: <optional game slug to auto-fetch the zip via the itch API>
-#
-# The `zip` value can be either:
-#   1. A direct HTTPS URL (curl download).
-#   2. A glob pattern (e.g. "dragon-jump-web.zip") matched against
-#      ~/arcade_games/downloads/ (newest match wins).
-#
-# If `itch` is set and no matching file is in ~/arcade_games/downloads/, the
-# sync script auto-downloads the upload from itch.io using the API key in
-# ~/.config/itch_api_key (see scripts/download-from-itch.sh).
+# collection: the numeric id of the itch.io collection. Find it in the
+# collection URL: https://itch.io/c/8014540/limittestarcade -> 8014540
+# (readable via https://api.itch.io/profile/collections with the API key).
 
-games:
-  - name: "Dragon Jump"
-    zip: "dragon-jump-web.zip"
-    itch: "dragon-jump"
+collection: 8014540      # LimitTestArcade
+prune: true
+poll_seconds: 60
+restart_es: true
+
+# Optional per-game overrides, matched by itch game id:
+#
+# games:
+#   - itch: 1829893       # PolyTrack (from the collection URL or API)
+#     name: "PolyTrack"   # folder/display name (default: itch title)
+#     upload: "PolyTrack-itch-v0.6.3.zip"  # pin a specific web.zip
+#   - itch: 4877158
+#     exclude: true        # never install this game
+#
+# Games that can't be auto-pulled (not free, not owned) log a warning and are
+# skipped; give them a direct zip URL via a `zip:` entry handled by
+# sync-itch-games.sh instead.
+
+games: []

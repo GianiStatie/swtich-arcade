@@ -292,6 +292,86 @@ The itch API only lets you download uploads from games **you own**. If a game
 is from another developer, use a direct download URL in the `zip` field instead
 of the `itch` slug.
 
+## Auto-update watcher (itch collection)
+
+`itch-watcher.py` runs as a user service on the Switch and mirrors an itch.io
+collection onto the cabinet. Adding a game to the collection, re-uploading a
+build, or removing it are all picked up automatically — the yaml list no
+longer needs manual edits for day-to-day changes.
+
+### How it works
+
+1. Every `poll_seconds` (60 s default) it fetches
+   `https://api.itch.io/collections/<id>/collection-games` (Bearer = the API
+   key in `~/.config/itch_api_key`), paginated.
+2. For each game it fetches uploads from the legacy v1 API
+   (`itch.io/api/1/<key>/game/<id>/uploads`) — this works for **free games
+   you don't own**, no download keys needed. It picks the HTML build
+   (`type == "html"`, fallback `-web` in the filename).
+3. Change detection is per-upload `md5_hash`/`updated_at` (and install-folder
+   existence) vs `~/arcade_games/.itch-state.json`. State is written only
+   after a successful install, so failures retry next poll.
+4. **Idle gate:** if Chromium is running (a game is being played), the sync
+   (and prune, and the ES restart) is deferred to the next cycle. A game in
+   progress is never touched.
+5. Install = signed URL download → unzip → flatten so `index.html` sits at
+   the root → atomic swap into `~/arcade_games/web/<Title>/` + `.web` marker
+   (same contract EmulationStation already scans).
+6. `prune: true` removes games deleted from the collection (folder + marker).
+7. When something changed, it restarts EmulationStation so the menu
+   refreshes — through the `launch-es.sh` wrapper (`/tmp/es-restart`) when the
+   wrapper is running, so its kiosk-mode handling (UIMode, RetroPie toggle,
+   TTY env) survives; without the wrapper it launches the raw binary itself.
+
+### Config (`~/arcade_games/itch-games.yaml`)
+
+```yaml
+collection: 8014540      # LimitTestArcade
+prune: true
+poll_seconds: 60
+restart_es: true
+games: []                # optional overrides (pin/exclude/rename by itch id)
+```
+
+The **collection id** comes from the collection URL
+(`itch.io/c/8014540/limittestarcade`) or
+`https://api.itch.io/profile/collections`.
+
+Per-game overrides (`games:` list, matched by `itch:` game id):
+
+- `name:` folder/display name override
+- `upload:` pin a specific upload filename (e.g. when itch has several web
+  builds and the wrong one would be picked)
+- `exclude: true` never install this game
+
+### Service
+
+Deployed as a **user** unit (`~/.config/systemd/user/itch-watcher.service`,
+enabled, linger on):
+
+```bash
+scp config/systemd/user/itch-watcher.service switch:/tmp/
+scp scripts/itch-watcher.py switch:~/scripts/
+ssh switch 'mkdir -p ~/.config/systemd/user && cp /tmp/itch-watcher.service ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user enable --now itch-watcher'
+ssh switch 'echo 1234 | sudo -S -p "" loginctl enable-linger tagap'
+```
+
+Management: `systemctl --user status itch-watcher` (logs appear in
+`systemctl --user status` output; journal files for user services are not
+persisted on this image). Run one poll by hand with
+`python3 ~/scripts/itch-watcher.py --once` and repair/initial-pull with
+`--force`.
+
+### Notes
+
+- A game that can't be auto-pulled (paid, not owned, not claimable) logs a
+  warning each cycle and is skipped; install it manually via
+  `sync-itch-games.sh` with a direct URL.
+- The itch API only allows reading one's own collections; the API key's
+  account must own (or follow/curate) the collection.
+- Legacy v1 endpoints handle uploads+downloads for free third-party games;
+  `api.itch.io` (Bearer) is only used for the collection listing.
+
 ## Kiosk mode + admin access (the Konami code)
 
 EmulationStation boots in **kiosk mode**, which hides the system-destructive
@@ -388,6 +468,7 @@ Mapping table (edit the `BTN_TO_KEY` dict in the script):
 | X (`BTN_NORTH`) | 307 | `KEY_ESC` | back / cancel |
 | Y (`BTN_WEST`) | 308 | `KEY_TAB` | menu |
 | Start + Select | 315 + 314 | (exit) | returns to ES |
+| Start + Select + B | 315 + 314 + 305 | (reboot) | panic reboot (frozen game) |
 
 The left analog stick can also be mapped to directions past a deadzone
 (`STICK_MAP`, disabled by default so stick drift never produces a phantom
@@ -414,7 +495,13 @@ browser process → renderer → JS), which is unavoidable for injected keys.
    detects Start + Select pressed together → calls `exit-to-es.sh` → kills
    Chromium → back to ES. evdev codes: `BTN_START=315`, `BTN_SELECT=314`.
 
-2. **In-game Quit button** (plain HTML games only) — a game's own Quit button
+2. **Start + Select + B** (panic reboot) — if a game froze so hard the exit
+   didn't work (e.g. GPU hang leaving Chromium uninterruptible), hold Start +
+   Select and press B: the bridge calls `sudo -n systemctl reboot`
+   (passwordless sudo drop-in `/etc/sudoers.d/arcade-panic`). This is read at
+   the evdev level, so it works even when X/the game are completely frozen.
+
+3. **In-game Quit button** (plain HTML games only) — a game's own Quit button
    can navigate to `http://127.0.0.1:8123/exit` directly. The `exit-server.py`
    handles the rest.
 
