@@ -307,7 +307,8 @@ longer needs manual edits for day-to-day changes.
 2. For each game it fetches uploads from the legacy v1 API
    (`itch.io/api/1/<key>/game/<id>/uploads`) — this works for **free games
    you don't own**, no download keys needed. It picks the HTML build
-   (`type == "html"`, fallback `-web` in the filename).
+   (`type == "html"`, fallback `-web` in the filename; newest by
+   `updated_at` if several exist).
 3. Change detection is per-upload `md5_hash`/`updated_at` (and install-folder
    existence) vs `~/arcade_games/.itch-state.json`. State is written only
    after a successful install, so failures retry next poll.
@@ -318,6 +319,9 @@ longer needs manual edits for day-to-day changes.
    the root → atomic swap into `~/arcade_games/web/<Title>/` + `.web` marker
    (same contract EmulationStation already scans).
 6. `prune: true` removes games deleted from the collection (folder + marker).
+   Only actual absence from the collection listing prunes: if a game's upload
+   lookup fails (rate limit, network blip) the local copy is kept and retried
+   next poll.
 7. When something changed, it restarts EmulationStation so the menu
    refreshes — through the `launch-es.sh` wrapper (`/tmp/es-restart`) when the
    wrapper is running, so its kiosk-mode handling (UIMode, RetroPie toggle,

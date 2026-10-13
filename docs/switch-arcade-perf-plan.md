@@ -106,7 +106,8 @@ All items must gracefully fall back to today's behavior if anything fails.
     kept as `webgame-server.py.bak-20261012`. The server is started per game launch
     (`launch-web-game.sh`), so the new file takes effect on the next launch — no
     service to restart. Test vehicle: a sideloaded `Dragon Jump Threads` entry in
-    `~/arcade_games/web/`, next to the old build. Verified: COOP/COEP on every
+    `~/arcade_games/web/`, next to the old build (removed after verification).
+    Verified: COOP/COEP on every
     response, `index.wasm` as `application/wasm` + `Content-Encoding: br`
     (4.3 MB vs 25.8 MB raw). `.pck` sidecars are skipped — the encrypted pck is
     incompressible (its brotli sidecar was +12 bytes); the game's CI compresses

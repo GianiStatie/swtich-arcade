@@ -12,6 +12,9 @@ Only ever touches games while no web game is running: the sync is skipped when
 Chromium is running, and a change detected mid-game is applied at the next
 idle poll. State lives in <GAMES_ROOT>/.itch-state.json; it is written only
 after a successful install, so failed downloads simply retry next poll.
+Prune deletes a local game only when it is actually absent from the
+collection listing; a failed upload lookup (rate limit, network blip) keeps
+the local copy and retries next poll.
 
 API notes (probed 2026-10-06, from the Switch):
   * Modern API (api.itch.io, Bearer key) reads the collection. Pagination via
@@ -208,6 +211,8 @@ def html_upload(game_id, key):
     if not html:
         log("game %d: no HTML upload on itch (not installable)" % game_id)
         return None
+    html.sort(key=lambda u: (u.get("updated_at") or "", u.get("id") or 0),
+              reverse=True)
     return html[0]
 
 
@@ -358,6 +363,7 @@ def sync_once(cfg, key, state, force=False):
     overrides = cfg["overrides"]
     changed = []            # [(name, game_id, upload, reason)]
     wanted = {}             # folder name -> state entry (if installable)
+    unresolved = set()      # in the collection, upload lookup failed this cycle
     uploads_cache = {}
 
     for game_id, meta in sorted(games.items()):
@@ -380,6 +386,7 @@ def sync_once(cfg, key, state, force=False):
                 log("%s: override upload %r not found on itch" % (
                     name, ov["upload"]))
         if up is None:
+            unresolved.add(name)
             continue
         uploads_cache[game_id] = up
         wanted[name] = {
@@ -400,7 +407,7 @@ def sync_once(cfg, key, state, force=False):
     removed = []
     if cfg["prune"]:
         for entry in state.get("games", {}):
-            if entry not in wanted:
+            if entry not in wanted and entry not in unresolved:
                 removed.append(entry)
 
     if not changed and not removed:
