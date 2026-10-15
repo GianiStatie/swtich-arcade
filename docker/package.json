@@ -1,0 +1,10 @@
+{
+  "name": "arcade-contract-sim-checker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless contract checks for Switch Arcade web builds.",
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
+}

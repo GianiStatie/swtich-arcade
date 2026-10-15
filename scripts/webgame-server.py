@@ -25,6 +25,11 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8124
 ROOT = sys.argv[2] if len(sys.argv) > 2 else "."
 
+# Interface to bind. Defaults to loopback (the cabinet's behavior: the game
+# server is reachable only from the Switch itself). The container sets
+# WEBGAME_BIND=0.0.0.0 in library mode so a published port can reach it.
+BIND_HOST = os.environ.get("WEBGAME_BIND", "127.0.0.1")
+
 ENCODINGS = (("br", ".br"), ("gzip", ".gz"))
 
 
@@ -75,4 +80,4 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    ThreadingHTTPServer(("127.0.0.1", PORT), NoCacheHandler).serve_forever()
+    ThreadingHTTPServer((BIND_HOST, PORT), NoCacheHandler).serve_forever()

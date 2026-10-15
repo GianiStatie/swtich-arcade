@@ -1,0 +1,141 @@
+# Arcade contract simulator — Docker Compose front-end (OS-neutral).
+#
+# Use this on Windows (no bash needed), or anywhere you prefer `docker compose`.
+# `docker/run.sh` remains available for macOS/Linux bash users.
+#
+# Build once (or let `up`/`run` build automatically):
+#   docker compose -f docker/compose.yaml build
+#
+# Long-running library (menu + host API on :8123). Runs MAXED by default
+# (more CPU/RAM, 640x360 kiosk) so 3D games run ~30 fps:
+#   docker compose -f docker/compose.yaml up library
+# Cabinet-faithful instead (4 cores / 4g / 1280x720):
+#   docker compose -f docker/compose.yaml --profile strict up library-strict
+#
+# One-shot tools (explicitly targeted, so a bare `up` only starts `library`):
+#   docker compose -f docker/compose.yaml run --rm list
+#   docker compose -f docker/compose.yaml run --rm sync
+#   BUILD_DIR=/path/to/build docker compose -f docker/compose.yaml run --rm check
+#   BUILD_DIR=/path/to/build docker compose -f docker/compose.yaml run --rm interactive
+#
+# On Windows PowerShell (use forward slashes in paths):
+#   $env:ITCH_API_KEY="..."; docker compose -f docker/compose.yaml up library
+#   $env:BUILD_DIR="C:/path/to/build"; docker compose -f docker/compose.yaml run --rm check
+#
+# Or drop a `docker/.env` next to this file (compose reads it automatically):
+#   ITCH_API_KEY=...
+#   BUILD_DIR=C:/path/to/build
+#   ARCADE_CPU_QUOTA=800000   # optional overrides; defaults are already "max"
+
+name: arcade-contract-sim
+
+x-arcade-common: &arcade-common
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  image: arcade-contract-sim
+
+# Default = "max": lift constraints to the container's ceiling so 3D games are
+# usable (~30 fps). CPU is a cgroup quota (microseconds per period). Use
+# --profile strict / library-strict for the cabinet-faithful figure, or override
+# with ARCADE_CPU_QUOTA / ARCADE_MEMORY / ARCADE_KIOSK_RES.
+x-arcade-limits: &arcade-limits
+  mem_limit: "${ARCADE_MEMORY:-8g}"
+  memswap_limit: "${ARCADE_MEMORY:-8g}"
+  cpu_quota: "${ARCADE_CPU_QUOTA:-800000}"
+  cpu_period: "${ARCADE_CPU_PERIOD:-100000}"
+
+services:
+  # Long-running: library menu (in-container kiosk on :6080) + arcade API
+  # (:8123) + the per-game server (:8124). Default service — no profile.
+  library:
+    <<: [*arcade-common, *arcade-limits]
+    command: ["library"]
+    init: true
+    tty: true
+    stdin_open: true
+    ports:
+      - "127.0.0.1:6080:6080"
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:8124:8124"
+    environment:
+      ITCH_API_KEY: "${ITCH_API_KEY:-}"
+      ARCADE_KIOSK_RES: "${ARCADE_KIOSK_RES:-640x360}"
+    volumes:
+      - arcade-games:/games
+      - arcade-cache:/cache
+
+  # Cabinet-faithful profile: 4 cores / 4g / 1280x720.
+  # Run with: docker compose --profile strict up library-strict
+  library-strict:
+    <<: [*arcade-common]
+    profiles: ["strict"]
+    command: ["library"]
+    init: true
+    tty: true
+    stdin_open: true
+    mem_limit: 4g
+    memswap_limit: 4g
+    cpu_quota: 400000
+    cpu_period: 100000
+    ports:
+      - "127.0.0.1:6080:6080"
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:8124:8124"
+    environment:
+      ITCH_API_KEY: "${ITCH_API_KEY:-}"
+      ARCADE_KIOSK_RES: "1280x720"
+    volumes:
+      - arcade-games:/games
+      - arcade-cache:/cache
+
+  # Pull the whole itch collection into the games volume.
+  sync:
+    <<: [*arcade-common, *arcade-limits]
+    profiles: ["tools"]
+    command: ["sync"]
+    environment:
+      ITCH_API_KEY: "${ITCH_API_KEY:-}"
+    volumes:
+      - arcade-games:/games
+
+  # Print installed game titles.
+  list:
+    <<: [*arcade-common, *arcade-limits]
+    profiles: ["tools"]
+    command: ["list"]
+    volumes:
+      - arcade-games:/games
+
+  # Headless contract checks (offline, constrained). Needs BUILD_DIR.
+  check:
+    <<: [*arcade-common, *arcade-limits]
+    profiles: ["tools"]
+    command: ["check"]
+    network_mode: "none"
+    volumes:
+      - "${BUILD_DIR:-.}:/game:ro"
+      - arcade-cache:/cache
+
+  # Play one build in the browser via noVNC. Needs BUILD_DIR.
+  interactive:
+    <<: [*arcade-common, *arcade-limits]
+    profiles: ["tools"]
+    command: ["interactive"]
+    init: true
+    tty: true
+    stdin_open: true
+    ports:
+      - "127.0.0.1:6080:6080"
+    environment:
+      ARCADE_KIOSK_RES: "${ARCADE_KIOSK_RES:-640x360}"
+    volumes:
+      - "${BUILD_DIR:-.}:/game:ro"
+      - arcade-cache:/cache
+
+volumes:
+  # Explicit names so compose and run.sh share the same volumes.
+  arcade-games:
+    name: arcade-contract-sim-games
+  arcade-cache:
+    name: arcade-contract-sim-cache

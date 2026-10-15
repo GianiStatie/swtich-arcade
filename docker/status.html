@@ -1,0 +1,169 @@
+<!doctype html>
+<!--
+  Static status page for the arcade simulator (opens with no server running).
+
+  Open it directly (file://) or via any static server:
+      open docker/status.html          # macOS
+      start docker/status.html         # Windows
+      xdg-open docker/status.html      # Linux
+
+  It checks whether the library container is up by loading the arcade API with
+  a <script> tag (JSONP) — script tags work from file:// pages, where fetch()
+  is blocked by Chrome. If the API answers, it shows "Running" and the game
+  list; otherwise "Not running" with the command to start it.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arcade simulator — status</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0b0d12; color: #e8ecf1;
+         font: 16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 24px 60px; }
+  h1 { margin: 0; font-size: 24px; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .08em;
+       color: #8b95a5; margin: 34px 0 10px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px;
+          border-radius: 999px; font-size: 13px; font-weight: 600;
+          vertical-align: middle; margin-left: 10px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .up   { background:#0f2a1a; color:#4ade80; border:1px solid #1c3d29; }
+  .up .dot   { background:#4ade80; box-shadow:0 0 0 4px rgba(74,222,128,.15); }
+  .down { background:#2a1216; color:#f87171; border:1px solid #3d1c22; }
+  .down .dot { background:#f87171; box-shadow:0 0 0 4px rgba(248,113,113,.15); }
+  .wait { background:#2a2412; color:#fbbf24; border:1px solid #3d341c; }
+  .wait .dot { background:#fbbf24; box-shadow:0 0 0 4px rgba(251,191,36,.15); }
+  .meta { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+          gap:12px; margin-top:18px; }
+  .card { background:#12161d; border:1px solid #232a36; border-radius:12px;
+          padding:14px 16px; }
+  .card .k { color:#6b7484; font-size:12px; text-transform:uppercase;
+             letter-spacing:.06em; }
+  .card .v { margin-top:6px; font-size:15px; word-break:break-word; }
+  ul.games { list-style:none; margin:0; padding:0; }
+  ul.games li { margin:8px 0; }
+  ul.games a { color:#7cb2ff; text-decoration:none; font-size:17px; }
+  ul.games a:hover { text-decoration:underline; }
+  .empty { padding:20px; border:1px dashed #2b3342; border-radius:12px;
+           color:#9aa4b2; }
+  pre { background:#12161d; border:1px solid #232a36; border-radius:10px;
+        padding:14px 16px; overflow:auto; font-size:13px; line-height:1.5;
+        color:#cbd5e1; }
+  code { background:#1a1f29; padding:2px 6px; border-radius:6px; font-size:13px; }
+  .links a { color:#7cb2ff; text-decoration:none; margin-right:16px; }
+  .links a:hover { text-decoration:underline; }
+  .muted { color:#8b95a5; font-size:14px; }
+  button { background:#1a1f29; color:#e8ecf1; border:1px solid #2b3342;
+           border-radius:8px; padding:6px 12px; font-size:13px; cursor:pointer; }
+  button:hover { border-color:#3b82f6; }
+</style>
+
+<div class="wrap">
+  <h1>Arcade simulator
+    <span id="pill" class="pill wait"><span class="dot"></span><span id="pilltext">Checking…</span></span>
+  </h1>
+  <p class="muted">Container status for the Switch arcade simulator. This page
+    works with nothing running; it pings the arcade API on
+    <code>127.0.0.1:8123</code>. <button id="recheck">Recheck</button></p>
+
+  <div class="meta">
+    <div class="card"><div class="k">API</div><div class="v" id="api">http://127.0.0.1:8123</div></div>
+    <div class="card"><div class="k">Games</div><div class="v" id="count">—</div></div>
+    <div class="card"><div class="k">Library path</div><div class="v"><code>/games/web</code></div></div>
+    <div class="card"><div class="k">Games volume</div><div class="v"><code>arcade-contract-sim-games</code></div></div>
+  </div>
+
+  <h2>Games</h2>
+  <div id="games" class="empty">Checking the container…</div>
+
+  <h2>How to check from a terminal</h2>
+  <pre>docker ps                                   # is the library container up?
+docker/run.sh --list                        # installed titles
+curl -s http://127.0.0.1:8123/ &gt;/dev/null &amp;&amp; echo running || echo "not running"</pre>
+
+  <h2>How to start / sync / get the files</h2>
+  <pre># start the library (menu + this API) — no key needed once synced
+docker/run.sh --library
+
+# pull / update the collection (needs an itch.io API key)
+ITCH_API_KEY=... docker/run.sh --library --sync
+
+# copy the game files to your machine
+docker run --rm -v arcade-contract-sim-games:/games \
+  -v "$PWD/games-export:/out" alpine \
+  sh -c 'mkdir -p /out &amp;&amp; cp -r /games/web /out/'</pre>
+
+  <h2>Links</h2>
+  <div class="links">
+    <a href="http://127.0.0.1:8123/">Open the live page</a>
+    <a href="http://localhost:6080/vnc.html">noVNC kiosk</a>
+    <a href="../RUNNING.md">Run guide</a>
+  </div>
+</div>
+
+<script>
+(function () {
+  var API = "http://127.0.0.1:8123";
+  var pill = document.getElementById("pill");
+  var pilltext = document.getElementById("pilltext");
+  var countEl = document.getElementById("count");
+  var gamesEl = document.getElementById("games");
+  var timer = null;
+
+  function setPill(cls, text) {
+    pill.className = "pill " + cls;
+    pilltext.textContent = text;
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function done(running, data) {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (running && data) {
+      setPill("up", "Running");
+      var games = (data.games || []);
+      countEl.textContent = games.length + (games.length === 1 ? " game" : " games");
+      if (games.length) {
+        gamesEl.className = "";
+        gamesEl.innerHTML = "<ul class='games'>" + games.map(function (g) {
+          return "<li><a href='" + esc(g.play) + "'>" + esc(g.name) + "</a></li>";
+        }).join("") + "</ul>";
+      } else {
+        gamesEl.className = "empty";
+        gamesEl.textContent = "No games yet — run --sync with an itch.io API key.";
+      }
+    } else {
+      setPill("down", "Not running");
+      countEl.textContent = "—";
+      gamesEl.className = "empty";
+      gamesEl.innerHTML = "Nothing is listening on <code>127.0.0.1:8123</code>.<br><br>" +
+        "Start it with <code>docker/run.sh --library</code> (or " +
+        "<code>docker compose -f docker/compose.yaml up library</code>).";
+    }
+  }
+
+  function check() {
+    setPill("wait", "Checking…");
+    countEl.textContent = "—";
+    gamesEl.className = "empty";
+    gamesEl.textContent = "Checking the container…";
+
+    window.__arcadeStatus = function (data) { done(true, data); };
+    var s = document.createElement("script");
+    s.src = API + "/?callback=__arcadeStatus&_=" + Date.now();
+    s.onerror = function () { done(false); };
+    document.head.appendChild(s);
+
+    // If the script never loads or errors, treat it as not running.
+    timer = setTimeout(function () { done(false); }, 3000);
+  }
+
+  document.getElementById("recheck").addEventListener("click", check);
+  check();
+})();
+</script>

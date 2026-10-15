@@ -1,0 +1,32 @@
+<!doctype html>
+<!--
+  Tuned noVNC landing page for the arcade simulator.
+
+  Served by websockify at http://localhost:6080/ . It auto-connects to the
+  kiosk with parameters chosen for latency over a live game view:
+    autoconnect  = connect without a click
+    resize       = scale the view to the browser window
+    reconnect    = survive brief drops
+    compression  = 2 (fast)
+    quality      = 6 (good enough, cheaper to encode)
+    show_dot     = 0 (no status dot)
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Arcade kiosk — connecting…</title>
+  <meta http-equiv="refresh"
+        content="0; url=vnc.html?autoconnect=true&amp;resize=scale&amp;reconnect=true&amp;reconnect_delay=1000&amp;compression=2&amp;quality=6&amp;show_dot=0">
+  <style>
+    body { margin:0; height:100vh; background:#0b0d12; color:#e8ecf1;
+           font:16px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+           display:flex; align-items:center; justify-content:center; }
+    a { color:#7cb2ff; }
+  </style>
+</head>
+<body>
+  Connecting to the arcade kiosk…
+  <noscript><a href="vnc.html?autoconnect=true&amp;resize=scale">open manually</a></noscript>
+  <a href="vnc.html?autoconnect=true&amp;resize=scale&amp;reconnect=true&amp;reconnect_delay=1000&amp;compression=2&amp;quality=6&amp;show_dot=0">open manually</a>
+</body>
+</html>
