@@ -3,9 +3,9 @@
   Static status page for the arcade simulator (opens with no server running).
 
   Open it directly (file://) or via any static server:
-      open docker/status.html          # macOS
-      start docker/status.html         # Windows
-      xdg-open docker/status.html      # Linux
+      open docker/web/status.html          # macOS
+      start docker/web/status.html         # Windows
+      xdg-open docker/web/status.html      # Linux
 
   It checks whether the library container is up by loading the arcade API with
   a <script> tag (JSONP) — script tags work from file:// pages, where fetch()
@@ -98,7 +98,7 @@ docker run --rm -v arcade-contract-sim-games:/games \
   <div class="links">
     <a href="http://127.0.0.1:8123/">Open the live page</a>
     <a href="http://localhost:6080/vnc.html">noVNC kiosk</a>
-    <a href="../RUNNING.md">Run guide</a>
+    <a href="../docs/RUNNING.md">Run guide</a>
   </div>
 </div>
 

@@ -15,7 +15,7 @@ kiosk, force-quit mechanism).
 - [Performance plan](switch-arcade-perf-plan.md) — the three tiers: game build, arcade launch, native ARM.
 - [Native ARM tier](native-arm-tier.md) — running Godot web exports natively (design).
 - [Contributor performance checklist](contributor-performance-checklist.md) — shareable guidance for people shipping games.
-- [Arcade contract simulator](../docker/README.md) — Docker image to test a web build against the cabinet's software contract, and a library mode that syncs the itch collection into a browsable game menu (not a hardware emulator). How to run it: [`docker/RUNNING.md`](../docker/RUNNING.md).
+- [Arcade contract simulator](../docker/README.md) — Docker image to test a web build against the cabinet's software contract, and a library mode that syncs the itch collection into a browsable game menu (not a hardware emulator). How to run it: [`docker/docs/RUNNING.md`](../docker/docs/RUNNING.md).
 
 ## Deployed files
 

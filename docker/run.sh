@@ -7,8 +7,9 @@
 #   ./run.sh --sync                  pull the whole itch collection into /games
 #   ./run.sh --list                  print installed game titles
 #
-# Hardware constraints are applied by default (see docker/README.md):
-#   4 GB RAM (no swap), 4 CPUs, forced SwiftShader GPU, 720p window.
+# Hardware constraints are applied by default (see docker/docs/FIDELITY.md):
+#   maxed by default (8 cores / 8g / 640x360, software GL); --strict for the
+#   cabinet figure (4 cores / 4g / 1280x720).
 #
 # Sync/library need an itch.io API key (env ITCH_API_KEY, or
 # ~/.config/itch_api_key mounted read-only) and network access.
@@ -56,7 +57,7 @@ Env (each overrides the profile default):
   ARCADE_RENDERER      kiosk software GL: llvmpipe (default, faster) | swiftshader
 
 Note: the container can never exceed the Docker VM's resources (colima/Docker
-Desktop). Raise those first for real headroom (see docker/FIDELITY.md).
+Desktop). Raise those first for real headroom (see docker/docs/FIDELITY.md).
 
 No bash (e.g. Windows)? Use docker/compose.yaml instead — see docker/README.md.
 EOF

@@ -233,7 +233,7 @@ def render_html(handler, games):
         "<h2>How to run / sync / get the files</h2><pre>{howto}</pre>"
         "<p class='muted'>This page is served by the running library container. "
         "If it stopped loading, the container is down — start it with "
-        "<code>docker/run.sh --library</code>. Open <code>docker/status.html</code> "
+        "<code>docker/run.sh --library</code>. Open <code>docker/web/status.html</code> "
         "for a status page that works even when nothing is running.</p>"
         "</div></body></html>".format(
             css=PAGE_CSS,

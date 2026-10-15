@@ -1,0 +1,20 @@
+# Build context is the repo root (the Dockerfile copies scripts/ + config/).
+# Keep it small — only these parts are ever COPY'd into the image.
+
+# VCS / editor / OS
+.git
+.gitignore
+.dockerignore
+.DS_Store
+
+# Docs are never copied into the image
+docs
+docker/docs
+docker/README.md
+
+# Python bytecode caches
+**/__pycache__
+**/*.py[cod]
+
+# Node deps are installed inside the image, not shipped in
+**/node_modules

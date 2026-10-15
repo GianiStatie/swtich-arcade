@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Node (the Docker checker installs deps inside the image)
+node_modules/
+
+# macOS
+.DS_Store
