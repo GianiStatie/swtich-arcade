@@ -362,6 +362,37 @@ ES wizard capture (`~/.emulationstation/es_temporaryinput.cfg`, Oct 6) has
 `a=0, b=1, x=2, y=3` — consistent. The two cabinets' panels are different
 encoder boards that happen to share IDs and names.
 
+Side by side (evdev code = 288 + raw index; the shim's `RAW_TO_STD` maps raw
+index → standard index on the hardware cabinet):
+
+| button | hardware cabinet: raw / code | software cabinet: code | standard index |
+|---|---|---|---|
+| A | 11 / 299 | 288 | 0 |
+| B | 10 / 298 | 289 | 1 |
+| X | 9 / 297 | 290 | 2 |
+| Y | 8 / 296 | 291 | 3 |
+| LB | 6 / 294 | 292 | 4 |
+| RB | 7 / 295 | 293 | 5 |
+| LT | 4 / 292 | 294 | 6 |
+| RT | 5 / 293 | 295 | 7 |
+| Select | 2 / 290 | 296 | 8 |
+| Start | 3 / 291 | 297 | 9 |
+| customL | 1 / 289 | not captured (presumably 298) | 10 (L3) |
+| customR | 0 / 288 | not captured (presumably 299) | 11 (R3) |
+
+Where the numbers live if a cabinet or panel ever changes:
+
+- the wiring selector: one word in `~/scripts/panel-wiring.conf`
+  (`standard` | `scrambled`; missing file = `scrambled`),
+- the hardware-mode remap table: `RAW_TO_STD` in `scripts/arcade-pad-shim.js`
+  (only injected on scrambled cabinets),
+- the bridge's panel combo codes: the per-wiring block in
+  `scripts/gamepad-bridge.py` (`PANEL_SELECT` / `PANEL_START` / `PANEL_RESET`).
+
+Re-derive the numbers for an unknown panel set with the passive evdev capture
+used above (one labelled press per code), or read the ES wizard capture
+`~/.emulationstation/es_temporaryinput.cfg`.
+
 **Per-cabinet switch — `~/scripts/panel-wiring.conf`** (one word):
 
 | value | cabinet | web shim | bridge panel codes (Select / Start / B) |
