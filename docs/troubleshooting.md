@@ -170,6 +170,30 @@ ls /usr/share/xsessions/openbox.desktop        # must exist
 ```
 A reboot is required for the session change to take effect.
 
+## Cabinet screen is black (EmulationStation crashed)
+
+**Symptom:** The cabinet's screen is black, no ES UI, but the unit responds
+over SSH/WiFi.
+
+**Cause (observed 2026-10-16, hardware mode):** ES crashed when the arcade-panel
+USB encoders were unplugged while it was running — `es_log.txt` stops exactly at
+the two `Removed joystick 'DragonRise Inc. Generic USB Joystick'` lines.
+`launch-es.sh` intentionally ends its restart loop when ES exits on its own, so
+nothing relaunches it and the session stays on the black X root window.
+
+**Fix:** restart the session (Openbox autostart launches ES again):
+```bash
+pgrep -f emulationstation || echo "ES IS DOWN"
+echo 1234 | sudo -S systemctl restart sddm
+```
+
+**Diagnose:** `tail ~/.emulationstation/es_log.txt` — the last lines before a
+sudden stop show what ES was doing when it died.
+
+> Note: the panel encoders live on the **hardware mode** cabinet; unplugging
+> them while a game/menu is up can reproduce this. Prefer exiting to a clean
+> session before rewiring panels.
+
 ## Joy-Con controls wrong / doubled in Chromium
 
 **Symptom:** In a web game, pressing D-pad **Up** also triggers **Right** (or

@@ -55,12 +55,26 @@ Each player gets a custom control panel:
 
 Two players supported.
 
-The controls are read by a gamepad bridge and injected as keyboard keys, so
-games should use standard keyboard input. Default mapping:
+**Arcade panels → standard gamepads.** The web game server injects a small
+remap shim into every page, so games can read the panels with the plain
+Gamepad API and the standard button layout: Player 1 is gamepad index 0,
+Player 2 is index 1.
+
+| Panel control | Standard gamepad button |
+|---|---|
+| A / B / X / Y | 0 / 1 / 2 / 3 |
+| LB / RB / LT / RT | 4 / 5 / 6 / 7 |
+| Select / Start | 8 / 9 |
+| custom L / custom R | 10 (L3) / 11 (R3) |
+| Joystick | left stick axes 0 / 1 |
+
+**Joy-Cons → keyboard.** The built-in Joy-Cons are read by a gamepad bridge
+and injected as keyboard keys, so games can also (or instead) use standard
+keyboard input:
 
 | Control | Key |
 |---|---|
-| Joystick / D-pad | Arrow keys |
+| D-pad | Arrow keys |
 | A | Space |
 | B | R |
 | X | Esc |

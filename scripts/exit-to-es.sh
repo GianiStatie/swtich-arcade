@@ -13,6 +13,7 @@ fi
 
 # Kill the local web-game HTTP server (launched by launch-web-game.sh) so it
 # doesn't hold the game directory or leave a stale port open.
+pkill -f "webgame-server.py 8124" 2>/dev/null || true
 pkill -f "http.server.*8124" 2>/dev/null || true
 pkill -f "busybox httpd -f -p 8124" 2>/dev/null || true
 

@@ -1,11 +1,13 @@
 # Multi-Player Arcade Panels — Two More Controllers
 
-**Status: DESIGNED, NOT IMPLEMENTED.** Discovery (reading the real device
-names/codes off the Switch) has not been done yet, so no code changes exist.
-This doc is a self-contained handoff so the work can resume on another machine.
+**Status: IMPLEMENTED & VERIFIED (2026-10-16).** The panels are remapped for
+web games by a small shim injected into every served page by
+`webgame-server.py` — see the final implementation in §12, which supersedes the
+original uinput plan (§6, §8). Discovery results are in §7.1.
 
 Repo: `git@github.com:GianiStatie/swtich-arcade.git` (note the `swtich` typo —
-it is the correct remote). Working tree is clean at commit `f861ee8`.
+it is the correct remote). The panels live on the **hardware mode** cabinet
+(see `docs/README.md`, "The two cabinets"); all work was done on it over WiFi.
 
 ## 1. What we're trying to do
 
@@ -160,7 +162,42 @@ Record, per encoder:
 
 These three records are what the remap table and the P1/P2 ordering depend on.
 
-## 8. Implementation plan
+### 7.1 Discovery results (2026-10-16, hardware mode)
+
+Recorded over WiFi on the hardware-mode cabinet with both panels attached:
+
+| Property | Value |
+|---|---|
+| Input device name | `DragonRise Inc.   Generic   USB  Joystick  ` (note the padding spaces) |
+| USB IDs | `0079:0006` ("PC TWIN SHOCK Gamepad") |
+| Panel A | `platform-70090000.xusb-usb-0:1.2:1.0-event-joystick` → `/dev/input/event6` (dock hub port 2) |
+| Panel B | `platform-70090000.xusb-usb-0:1.3:1.0-event-joystick` → `/dev/input/event7` (dock hub port 3) |
+| Buttons | `BTN_TRIGGER`..`BTN_BASE6` = codes 288–299 (12 buttons, no standard names) |
+| Axes | `ABS_X/Y/Z/RX/RZ` 0–255 (flat=15), `ABS_HAT0X/ABS_HAT0Y` −1..1 |
+
+- Both boards are identical and have no `uniq`/serial, so P1/P2 come from their
+  USB port order: **`:1.2` (dock port 2) = Player 1, `:1.3` = Player 2**
+  (verified: Chromium enumerates them as gamepad index 0 / 1 in this order).
+- The labelled-button ↔ raw-code table came from the ES input-wizard capture
+  (`~/.emulationstation/es_temporaryinput.cfg`, written when the panels were
+  configured in ES). Raw js-id → role: `0=customR 1=customL 2=Select 3=Start
+  4=LT 5=RT 6=LB 7=RB 8=Y 9=X 10=B 11=A` (js ids are evdev codes 288+id; the
+  joystick is `ABS_X`/`ABS_Y`). Note the roles match ES behavior on this
+  cabinet: raw 291 (js 3) is the button ES uses as Start (opens the menu).
+- ES log (`~/.emulationstation/es_log.txt`) shows both as
+  `DragonRise Inc. Generic USB Joystick`, instance IDs 1 and 2.
+
+**Notable side effect:** ES crashes if the panels are unplugged while it runs
+(its log stops right at the `Removed joystick …` lines) and stays black because
+`launch-es.sh` does not relaunch ES after an unexpected exit — see
+`docs/troubleshooting.md`.
+
+## 8. Original implementation plan (SUPERSEDED by §12)
+
+> Kept for reference. This uinput-based plan was built and tested end-to-end,
+> but Chromium on this box does not reliably expose uinput gamepads to pages
+> (coldplug skips them, hotplug is racy, udev "add" nudges only sometimes work),
+> so the shipped solution remaps inside the page instead — see §12.
 
 ### 8.1 `scripts/gamepad-bridge.py` (main work)
 
@@ -213,41 +250,81 @@ EndSection
 
 ## 9. Verification
 
-- `evtest` against `arcade-p1` / `arcade-p2` to confirm the emitted codes.
-- A browser gamepad-tester page: confirm the indices are standard and the
-  P1/P2 order is stable across reboots / re-plugin.
-- Target game: panel 1 = P1, panel 2 = P2, no R3/R4 mix-up.
-- Confirm ES still navigates between games (it reads gamepads via SDL/evdev and
-  must not be disturbed).
+Verified on the hardware-mode cabinet on 2026-10-16, with a temporary
+gamepad-tester page served through `webgame-server.py`:
+
+- Panel 1 = gamepad index 0, Panel 2 = gamepad index 1 (stable).
+- Physical A (Panel 1) → standard button 0 (a); physical A on Panel 2 → the
+  same, on index 1.
+- The two middle buttons → standard Start (9) and Select (8), matching their
+  ES roles.
+- The joystick arrives on the standard left-stick axes (axis 0/1); it needs no
+  remap and stays untouched by the shim.
 
 ## 10. Risks / fallback
 
-The one unverifiable-from-here question: whether Chromium applies a *standard*
-mapping to a `uinput` gamepad. If indices come out wrong, options in order:
-
-1. Tune the exposed capability set (which buttons/axes, their order/ranges).
-2. Name the virtual device after a known pad (may or may not affect Chromium's
-   mapping selection).
-3. Last resort: keyboard-inject the panels too (panel 1 = P1 keys; panel 2 = a
-   distinct P2 key set the game must support).
+Resolved: the uinput approach's open question (does Chromium apply a standard
+mapping to a uinput gamepad?) turned out moot — on this stack Chromium will not
+reliably enumerate uinput gamepads at all. The shipped shim sidesteps Chromium's
+device handling entirely by remapping inside the served page; no fallback is
+needed.
 
 ## 11. Open items / resume checklist
 
-1. [ ] Run the discovery commands (section 7); record names, `phys`/`by-path`,
-       and per-button codes for both panels.
-2. [ ] Decide P1/P2 ordering from the two `by-path` entries (e.g. left/front
-       USB port = P2/P1) and pin it in the bridge config.
-3. [ ] Implement section 8.
-4. [ ] Deploy and verify (section 9).
-5. [ ] Update docs (section 8.3) and commit.
+1. [x] Run the discovery commands (section 7); record names, `phys`/`by-path`,
+       and per-button codes for both panels. *(see §7.1)*
+2. [x] P1/P2 ordering: `xusb-usb-0:1.2` = P1, `:1.3` = P2 (Chromium index 0/1).
+3. [x] Labelled-button ↔ raw-code table (from the ES wizard capture, verified
+       with a press test: A → button 0).
+4. [x] Implemented — via the in-page shim (§12), not the uinput plan (§8).
+5. [x] Deployed to both cabinets and verified on hardware mode (§9).
+6. [x] Docs updated (`event-specs.md` input section, this doc, `README.md`
+       deployed files).
 
-Deploy commands (from the repo root, once implemented):
+## 12. Final implementation (2026-10-16)
+
+**How it works.** Chromium exposes the raw DragonRise panels to pages with
+button indices in raw code order, which scrambles every button. Instead of
+fighting Chromium's device handling, the remap happens *in the page*:
+`webgame-server.py` injects a small script into every served HTML page, and
+that shim wraps `navigator.getGamepads()` (and normalizes the
+`gamepadconnected` event), replacing the panels' `buttons` array with the
+standard order. Axes pass through untouched.
+
+Files:
+
+| File | Role |
+|---|---|
+| `scripts/arcade-pad-shim.js` | The in-page remap (raw→standard button table; `RAW_TO_STD`). |
+| `scripts/webgame-server.py` | Injects `<script src="/__arcade_pad_shim.js">` after `<head>` in every `.html` it serves, and serves the shim. HTML is never served from a compressed sidecar, so the tag is always present. |
+| `scripts/gamepad-bridge.py` | Unchanged (original): Joy-Cons → keyboard only; it does not touch the panels. |
+
+Mapping (physical → standard index): A→0, B→1, X→2, Y→3, LB→4, RB→5, LT→6,
+RT→7, Select→8, Start→9, customL→10 (L3), customR→11 (R3); joystick → left
+stick axes 0/1.
+
+Notes:
+
+- Both panels are wired identically, so the same table applies to both; the
+  game sees them as gamepad index 0 (Player 1, dock port `:1.2`) and index 1
+  (Player 2, `:1.3`).
+- The panels stay visible to EmulationStation as before (its own raw
+  `es_input.cfg` profiles still apply); the shim only affects pages served by
+  `webgame-server.py`.
+- A temporary `PadTest` game (a live gamepad-tester page + logger) was used
+  for verification on the hardware-mode cabinet and then removed from the
+  cabinets; it lives in the repo as `tools/padtest/` (see
+  `panel-input-investigation.md`).
+
+Deploy (both cabinets; from the repo root):
 
 ```bash
-scp scripts/gamepad-bridge.py switch:~/scripts/
-scp config/10-ignore-joycons.conf switch:/tmp/
-ssh switch 'chmod +x ~/scripts/gamepad-bridge.py'
-ssh switch 'echo 1234 | sudo -S -p "" cp /tmp/10-ignore-joycons.conf /etc/X11/xorg.conf.d/10-ignore-joycons.conf'
-# restart the bridge / session to pick up changes:
-ssh switch 'pkill -f gamepad-bridge.py; sudo systemctl restart sddm'
+scp scripts/webgame-server.py scripts/arcade-pad-shim.js switch-hw:~/scripts/
+scp scripts/webgame-server.py scripts/arcade-pad-shim.js switch-sw:~/scripts/
+ssh switch-hw 'chmod +x ~/scripts/webgame-server.py'
+ssh switch-sw 'chmod +x ~/scripts/webgame-server.py'
 ```
+
+The web game server restarts on every game launch, so the next game picks up
+the shim automatically (an already-running game keeps the old page until
+relaunch).

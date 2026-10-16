@@ -15,8 +15,70 @@ kiosk, force-quit mechanism).
 - [Performance plan](switch-arcade-perf-plan.md) — the three tiers: game build, arcade launch, native ARM.
 - [Native ARM tier](native-arm-tier.md) — running Godot web exports natively (design).
 - [Contributor performance checklist](contributor-performance-checklist.md) — shareable guidance for people shipping games.
-- [Multi-player arcade panels](multi-controller-panels.md) — design/handoff for the two added USB-encoder panels (P1/P2 as corrected virtual controllers); **not implemented**, discovery pending.
+- [Multi-player arcade panels](multi-controller-panels.md) — design/handoff for the two added USB-encoder panels (P1/P2 as standard gamepads); **implemented** — panels are remapped for web games by a shim injected into served pages.
+- [Panel input investigation](panel-input-investigation.md) — field notes from fixing the panel inputs: what was tried (uinput, udev, shims), what failed and why, environment quirks, and the reusable test harness in `tools/padtest/`.
 - [Arcade contract simulator](../docker/README.md) — Docker image to test a web build against the cabinet's software contract, and a library mode that syncs the itch collection into a browsable game menu (not a hardware emulator). How to run it: [`docker/docs/RUNNING.md`](../docker/docs/RUNNING.md).
+
+## The two cabinets
+
+Both units are identical Switch-based cabinets with the same hostname
+(`tagap-laptop`), so mDNS (`tagap-laptop.local`) is ambiguous. They are told
+apart by name:
+
+| | **hardware mode** | **software mode** |
+|---|---|---|
+| Difference | has the two arcade-panel USB encoders | Joy-Cons only, no panels |
+| Board serial (`/proc/device-tree/serial-number`) | `NXO-2EDABE7E-30080F` | `NXO-30D61FFC-30020F` |
+| WiFi MAC (`/sys/class/net/wlp1s0/address`) | `98:b6:e9:25:41:83` | `98:b6:e9:29:e0:05` |
+| WiFi IP (static, set 2026-10-16) | `192.168.50.219` | `192.168.50.75` |
+| Panels | 2× DragonRise encoders (USB `0079:0006`) on the dock hub | — |
+
+Identify whichever unit you're on in one line:
+
+```bash
+cat /proc/device-tree/serial-number; echo
+cat /sys/class/net/wlp1s0/address
+lsusb | grep 0079    # two hits = panels plugged in (hardware mode, docked)
+```
+
+### Connecting from a new PC
+
+Both units are always reachable over the home WiFi at fixed addresses (made
+static on the units themselves, so they no longer move with DHCP):
+
+| Alias | Address | Unit |
+|---|---|---|
+| `switch-hw` | `192.168.50.219` | hardware mode |
+| `switch-sw` | `192.168.50.75` | software mode |
+
+Set up a new machine in two steps:
+
+1. Add the aliases to `~/.ssh/config` (or just use the addresses directly):
+
+   ```
+   Host switch-hw
+       HostName 192.168.50.219
+       User tagap
+   Host switch-sw
+       HostName 192.168.50.75
+       User tagap
+   ```
+
+2. Install your SSH key so you stop typing the password (asked once):
+
+   ```bash
+   ssh-copy-id switch-hw
+   ssh-copy-id switch-sw
+   ```
+
+   Password auth also works: user `tagap`, same password as `sudo` on the
+   cabinets. macOS needs no extra setup (`ssh-copy-id` ships with it).
+
+If an address ever stops responding, the static profile may have been lost
+(e.g. profile re-created); find the unit on the router by MAC
+(`98:b6:e9:25:41:83` / `98:b6:e9:29:e0:05`) and re-apply the address. Adding
+DHCP reservations for those two MACs on the router is a good belt-and-braces
+option.
 
 ## Deployed files
 
@@ -25,7 +87,8 @@ kiosk, force-quit mechanism).
 | `scripts/launch-es.sh` | `~/scripts/launch-es.sh` | Launch ES in kiosk mode (Konami code unlocks admin UI) |
 | `scripts/uimode-watcher.py` | `~/scripts/uimode-watcher.py` | Forces ES restart on Konami unlock so the RetroPie menu reappears |
 | `scripts/launch-web-game.sh` | `~/scripts/launch-web-game.sh` | Launch a web game in Chromium kiosk |
-| `scripts/webgame-server.py` | `~/scripts/webgame-server.py` | Per-game HTTP server (started by `launch-web-game.sh`): no-store, COOP/COEP, `.wasm` MIME, `.br`/`.gz` sidecar serving |
+| `scripts/webgame-server.py` | `~/scripts/webgame-server.py` | Per-game HTTP server (started by `launch-web-game.sh`): no-store, COOP/COEP, `.wasm` MIME, `.br`/`.gz` sidecar serving; injects the arcade pad shim into every HTML page |
+| `scripts/arcade-pad-shim.js` | `~/scripts/arcade-pad-shim.js` | In-page remap of the arcade panels' buttons to standard Gamepad API indices (served/injected by `webgame-server.py`) |
 | `scripts/exit-server.py` | `~/scripts/exit-server.py` | HTTP on `:8123`; powers in-game Quit buttons (`/exit`) |
 | `scripts/exit-to-es.sh` | `~/scripts/exit-to-es.sh` | Kill Chromium + relaunch ES |
 | `scripts/gamepad-bridge.py` | `~/scripts/gamepad-bridge.py` | Joy-Con → keyboard bridge + Start+Select force-quit + Start+Select+B panic reboot |
@@ -54,7 +117,10 @@ kiosk, force-quit mechanism).
 
 ## Quick reference
 
-- **SSH:** `ssh switch` (user `tagap`, key-based, over USB gadget networking).
+- **SSH:** over WiFi — `ssh switch-hw` (hardware mode) / `ssh switch-sw`
+  (software mode), user `tagap`, key-based (password fallback). `ssh switch`
+  (`192.168.55.1`) is the legacy USB gadget link and only exists while the unit
+  is cabled to the PC in device mode.
   - USB link fix (Oct 6): the gadget interface name can change between ports
     (`enp7s0f3u2` on the current dock port); when a new default
     `Wired connection N` sticks in DHCP, set it static:

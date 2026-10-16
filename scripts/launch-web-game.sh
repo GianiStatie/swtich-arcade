@@ -41,6 +41,15 @@ elif [[ -x "/home/tagap/scripts/webgame-server.py" ]]; then
   SERVER_SCRIPT="/home/tagap/scripts/webgame-server.py"
 fi
 
+# Reap any stale server still holding the port (e.g. one left over from a
+# crashed or manual launch). Without this the new server cannot bind, and the
+# kiosk would then be answered by the stale one — showing the wrong game (or
+# a leftover test page) on every launch.
+pkill -f "webgame-server.py ${PORT}" 2>/dev/null || true
+pkill -f "http.server ${PORT} " 2>/dev/null || true
+pkill -f "busybox httpd -f -p ${PORT}" 2>/dev/null || true
+sleep 0.5
+
 if [[ -n "${SERVER_SCRIPT:-}" ]]; then
   python3 "${SERVER_SCRIPT}" "${PORT}" "${GAME_DIR}" \
     >/tmp/webgame_server.log 2>&1 &
@@ -60,6 +69,13 @@ fi
 
 # Give the server a moment to bind before Chromium connects.
 sleep 1
+
+# If the server died (e.g. the port was still busy), fail visibly instead of
+# letting Chromium connect to whatever else owns the port.
+if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+  echo "ERROR: web game server failed to start (see /tmp/webgame_server.log)" >&2
+  exit 1
+fi
 
 # Persistent cache dir so shaders/wasm survive reboots and are shared across games.
 CACHE_DIR="/home/tagap/.cache/arcade"

@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>PadTest</title>
+<style>body{background:#111;color:#0f0;font:14px/1.5 monospace;padding:1em;white-space:pre-wrap}</style>
+</head>
+<body>
+<div id="out">waiting for gamepads...</div>
+<script>
+var last = "";
+function snapshot() {
+  var pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  var parts = [];
+  for (var i = 0; i < pads.length; i++) {
+    var p = pads[i];
+    if (!p) continue;
+    var pressed = [];
+    for (var b = 0; b < p.buttons.length; b++) {
+      if (p.buttons[b].pressed) pressed.push(b);
+    }
+    var axes = [];
+    for (var a = 0; a < p.axes.length; a++) axes.push(p.axes[a].toFixed(2));
+    parts.push(p.index + ":" + p.id + "|m=" + p.mapping +
+               "|b=" + pressed.join(",") + "|a=" + axes.join(","));
+  }
+  return parts.join(" ; ") || "(no gamepads)";
+}
+setInterval(function () {
+  var s = snapshot();
+  if (s !== last) {
+    last = s;
+    document.getElementById("out").textContent =
+      new Date().toLocaleTimeString() + "\n" + s;
+    var img = new Image();
+    img.src = "http://127.0.0.1:8130/r?d=" + encodeURIComponent(s) +
+              "&n=" + Date.now();
+  }
+}, 100);
+</script>
+</body>
+</html>
