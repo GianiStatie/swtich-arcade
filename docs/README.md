@@ -80,6 +80,33 @@ If an address ever stops responding, the static profile may have been lost
 DHCP reservations for those two MACs on the router is a good belt-and-braces
 option.
 
+### WiFi fallback (mobile hotspot)
+
+Both cabinets have a saved profile for the phone hotspot
+(`Botocera`, added 2026-10-16) with `autoconnect-priority: -5`, so they join it
+automatically whenever no better known network is in range (home is `10`,
+"Viata cu Digi" is `0`; the hotspot loses to both and is only used when it is
+the sole known network available). The SSID is **case-sensitive** — the
+profile was first saved as `botocera` (as casually dictated) and had to be
+corrected to the hotspot's actual `Botocera`. To repeat this on another unit:
+
+```bash
+echo 1234 | sudo -S -p "" nmcli connection add type wifi con-name Botocera \
+  ssid Botocera wifi-sec.key-mgmt wpa-psk wifi-sec.psk '<hotspot password>' \
+  connection.autoconnect yes connection.autoconnect-priority -5
+```
+
+Networking quirk on this image (Ubuntu 24.04 + netplan↔NM integration):
+`/etc/NetworkManager/system-connections/` is empty by design — every NM
+connection is mirrored into a root-only `/etc/netplan/90-NM-<uuid>.yaml`
+(persists across reboots) and materialized at runtime into
+`/run/NetworkManager/system-connections/`. So create/edit profiles with
+`nmcli` and they persist automatically; `netplan generate` may warn if any
+`/etc/netplan/*.yaml` isn't `600` (all are, as of 2026-10-16). For WiFi scans
+use `nmcli dev wifi` (or `wpa_cli -i wlp1s0 scan`/`scan_results` for the raw
+supplicant view) — note `iw` is **not installed** on the units. Both units
+scan 2.4 GHz (incl. ch 12–13) and 5 GHz fine.
+
 ## Deployed files
 
 | Path (on this repo) | Deployed to (on Switch) | Purpose |
@@ -91,14 +118,14 @@ option.
 | `scripts/arcade-pad-shim.js` | `~/scripts/arcade-pad-shim.js` | In-page remap of the arcade panels' buttons to standard Gamepad API indices (served/injected by `webgame-server.py`) |
 | `scripts/exit-server.py` | `~/scripts/exit-server.py` | HTTP on `:8123`; powers in-game Quit buttons (`/exit`) |
 | `scripts/exit-to-es.sh` | `~/scripts/exit-to-es.sh` | Kill Chromium + relaunch ES |
-| `scripts/gamepad-bridge.py` | `~/scripts/gamepad-bridge.py` | Joy-Con → keyboard bridge + Start+Select force-quit + Start+Select+B panic reboot |
+| `scripts/gamepad-bridge.py` | `~/scripts/gamepad-bridge.py` | Joy-Con → keyboard bridge + Start+Select force-quit + Start+Select+B panic reboot; also watches the arcade panels passively (no grab) for the same combos |
 | `scripts/sync-itch-games.sh` | `~/scripts/sync-itch-games.sh` | Manual re-sync of games from `itch-games.yaml` (fallback) |
 | `scripts/download-from-itch.sh` | `~/scripts/download-from-itch.sh` | Fetch a named upload from itch.io via API |
 | `scripts/itch-watcher.py` | `~/scripts/itch-watcher.py` | Poll the itch collection; auto-install updates / prune / restart ES |
 | `config/systemd/user/itch-watcher.service` | `~/.config/systemd/user/itch-watcher.service` | User service running the watcher (enabled + linger) |
 | `scripts/arcade-perf-mode.sh` | `~/scripts/arcade-perf-mode.sh` | nvpmodel + CPU governor to performance |
 | `config/itch-games.yaml` | `~/arcade_games/itch-games.yaml` | List of games to pull |
-| `config/openbox-autostart` | `~/.config/openbox/autostart` | Openbox session autostart (perf + exit-server + gamepad-bridge + uimode-watcher + ES via launch-es.sh) |
+| `config/openbox-autostart` | `~/.config/openbox/autostart` | Openbox session autostart (stale-session reaper + perf + exit-server + gamepad-bridge + uimode-watcher + HDMI volume + ES via launch-es.sh) |
 | `config/10-ignore-joycons.conf` | `/etc/X11/xorg.conf.d/10-ignore-joycons.conf` | libinput: ignore Joy-Cons as X pointer/keyboard (bridge handles input) |
 | `config/themes/carbon-2021/TAGAP Games/theme.xml` | `/etc/emulationstation/themes/carbon-2021/TAGAP Games/theme.xml` | TAGAP Games theme overlay (badge logo, hides text) |
 | `config/themes/carbon-2021/TAGAP Games/art/tagap.png` | `/etc/emulationstation/themes/carbon-2021/TAGAP Games/art/tagap.png` | TAGAP badge logo (8-bit transparent PNG) |

@@ -308,6 +308,11 @@ Notes:
 - Both panels are wired identically, so the same table applies to both; the
   game sees them as gamepad index 0 (Player 1, dock port `:1.2`) and index 1
   (Player 2, `:1.3`).
+- Start + Select on **either panel** exits the running game (and Start+Select+B
+  reboots), same as the Joy-Cons: `gamepad-bridge.py` watches the encoders
+  passively — it never grabs them, so Chromium keeps its Gamepad API view (the
+  shim depends on it). Panel raw codes: Start=291, Select=290, B=298. Added and
+  verified 2026-10-16 (`Quit combo pressed (panel)` in the bridge log).
 - The panels stay visible to EmulationStation as before (its own raw
   `es_input.cfg` profiles still apply); the shim only affects pages served by
   `webgame-server.py`.

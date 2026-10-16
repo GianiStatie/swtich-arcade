@@ -13,6 +13,19 @@ start_once() {
   fi
 }
 
+# Reap orphaned processes from a previous session (2026-10-16). An sddm
+# restart does not always terminate the old session's tree: a leftover
+# EmulationStation keeps spinning at ~30-45% CPU on its dead X connection and
+# its leftover window state can leave the new session black; a kiosk or game
+# server from a restart during play lingers the same way. Killing the ES
+# wrapper first stops its restart loop from resurrecting ES; the orphaned
+# autostart shells above it then exit on their own.
+pkill -f "scripts/launch-es.sh" 2>/dev/null || true
+pkill -f "supplementary/emulationstation/emulationstation" 2>/dev/null || true
+pkill -9 -f "chromium.org/chromium/chrome.*--kiosk" 2>/dev/null || true
+pkill -f "scripts/webgame-server.py" 2>/dev/null || true
+sleep 1
+
 /home/tagap/scripts/arcade-perf-mode.sh &
 start_once exit-server.py python3 -u
 start_once gamepad-bridge.py python3 -u
@@ -21,4 +34,16 @@ start_once uimode-watcher.py python3 -u
 # the RetroPie system's visibility to match). The Konami code unlocks Full mode
 # for the session; the next session start re-locks it here.
 sed -i 's|<string name="UIMode" value="[^"]*"|<string name="UIMode" value="kiosk"|' ~/.emulationstation/es_settings.cfg 2>/dev/null || true
+# Keep the HDMI output at the working volume: the PipeWire sink volume for
+# the tegra-hda HDMI output is not persisted anywhere, came up at 40%
+# (-24 dB) on a fresh session and made the arcade very quiet. 100% was
+# still a bit too quiet; 150% (+10.6 dB) is the settled level. Retry
+# because the sink only exists once the HDMI card is ready.
+(
+  for _ in $(seq 1 30); do
+    pactl set-sink-volume alsa_output.platform-70030000.hda.hdmi-stereo 150% 2>/dev/null && break
+    sleep 1
+  done
+) &
+
 /home/tagap/scripts/launch-es.sh

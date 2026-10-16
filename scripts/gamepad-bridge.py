@@ -22,10 +22,15 @@ Requires: python3-evdev, /dev/uinput writable (tagap is in the 'input' group).
 Panic combos (work even when the game/X are frozen):
   Start + Select     exit game back to EmulationStation
   Start + Select + B reboot the cabinet
+
+On the hardware-mode cabinet the same combos also work from either arcade
+panel: a second, passive watcher reads the DragonRise encoders without
+grabbing them (Chromium must keep them for the in-page gamepad shim).
 """
 import select
 import signal
 import subprocess
+import threading
 import time
 
 try:
@@ -65,6 +70,16 @@ SELECT_BUTTON = 314 # BTN_SELECT
 RESET_BUTTON = 305  # BTN_EAST (B) — also the third panic button
 QUIT_SCRIPT = "/home/tagap/scripts/exit-to-es.sh"
 
+# --- Arcade panel panic combos (hardware-mode cabinet only) -----------------
+# The DragonRise encoders must stay readable by Chromium (the in-page gamepad
+# shim relies on it), so the panel watcher is passive — it never grabs.
+# Raw button -> evdev code on the panels: 2=Select -> 290, 3=Start -> 291,
+# 10=B -> 298 (code = 288 + raw index; see docs/panel-input-investigation.md).
+PANEL_NAME = "DragonRise"
+PANEL_SELECT = 290
+PANEL_START = 291
+PANEL_RESET = 298
+
 # Panic combos (state-based; work even when the game/X/GPU are frozen,
 # because we read evdev directly):
 #   Start + Select      -> exit the game to EmulationStation (exit-to-es.sh)
@@ -89,6 +104,22 @@ def _find_controller():
     return None
 
 
+def _find_panels():
+    """Return the arcade panel encoder devices present right now.
+
+    The panels only exist on the hardware-mode cabinet; an empty list is
+    normal elsewhere, and on a fresh plug-in.
+    """
+    panels = []
+    for path in evdev.list_devices():
+        dev = evdev.InputDevice(path)
+        if PANEL_NAME in (dev.name or ""):
+            panels.append(dev)
+        else:
+            dev.close()
+    return panels
+
+
 def _exit_game():
     subprocess.Popen([QUIT_SCRIPT],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -100,6 +131,56 @@ def _reboot():
     subprocess.Popen(
         ["sudo", "-n", "systemctl", "reboot"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _panel_watch():
+    """Watch the arcade panels for the panic combos, passively (no grab).
+
+    Same combos as the Joy-Cons, gated on a game running:
+      Start + Select      -> exit the game (exit-to-es.sh)
+      Start + Select + B  -> reboot the cabinet
+    Panels can be unplugged/replugged; on read errors we rediscover them.
+    """
+    while _keep_running:
+        panels = _find_panels()
+        if not panels:
+            time.sleep(3)
+            continue
+        fds = {p.fd: p for p in panels}
+        states = {p.fd: {"start": False, "select": False} for p in panels}
+        try:
+            while _keep_running:
+                ready, _, _ = select.select(list(fds), [], [], 0.5)
+                for fd in ready:
+                    for event in fds[fd].read():
+                        if event.type != ecodes.EV_KEY:
+                            continue
+                        st = states[fd]
+                        if event.code == PANEL_START:
+                            st["start"] = (event.value == 1)
+                        elif event.code == PANEL_SELECT:
+                            st["select"] = (event.value == 1)
+                        elif event.code == PANEL_RESET:
+                            if event.value == 1 and st["start"] and st["select"]:
+                                _reboot()
+                                return
+                            continue
+                        if event.value == 1 and st["start"] and st["select"]:
+                            if _chromium_running():
+                                print("Quit combo pressed (panel); "
+                                      "exiting game.", flush=True)
+                                _exit_game()
+                                # Require a fresh Start+Select hold to avoid
+                                # re-firing while the pair is still held.
+                                st["start"] = st["select"] = False
+        except (OSError, IOError):
+            pass  # panel unplugged; rediscover below
+        finally:
+            for p in panels:
+                try:
+                    p.close()
+                except (OSError, IOError):
+                    pass
 
 
 def _emit_key(ui, keycode, value):
@@ -248,6 +329,10 @@ def main():
         evdev.ecodes.EV_KEY: sorted(set(BTN_TO_KEY.values())
                                     | set(STICK_MAP.values())),
     }, name="arcade-bridge")
+
+    # Passive panel watcher for the panic combos (hardware-mode cabinet);
+    # never grabs, so Chromium keeps its Gamepad API view of the panels.
+    threading.Thread(target=_panel_watch, daemon=True).start()
 
     try:
         while _keep_running:

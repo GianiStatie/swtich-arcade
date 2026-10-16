@@ -114,6 +114,11 @@ There is also a plain-HTML Quit button path for simple games.
    ```
    The bridge reads the Combined Joy-Cons (`/dev/input/event8`) continuously.
    evdev codes: `BTN_START=315`, `BTN_SELECT=314` on the Combined Joy-Cons.
+   On the hardware-mode cabinet the same combo also works from **either arcade
+   panel**: the bridge watches the DragonRise encoders *passively* (never
+   grabs — Chromium keeps them for the gamepad shim). Panel codes: Start=291,
+   Select=290, B=298; on success the log shows
+   `Quit combo pressed (panel); exiting game.` (added + verified 2026-10-16).
 
 2. **In-game Quit button** (plain HTML games only) — the game's Quit button
    must navigate to `http://127.0.0.1:8123/exit`. Verify the exit-server is
@@ -170,28 +175,53 @@ ls /usr/share/xsessions/openbox.desktop        # must exist
 ```
 A reboot is required for the session change to take effect.
 
-## Cabinet screen is black (EmulationStation crashed)
+## Cabinet screen is black
 
 **Symptom:** The cabinet's screen is black, no ES UI, but the unit responds
 over SSH/WiFi.
 
-**Cause (observed 2026-10-16, hardware mode):** ES crashed when the arcade-panel
-USB encoders were unplugged while it was running — `es_log.txt` stops exactly at
-the two `Removed joystick 'DragonRise Inc. Generic USB Joystick'` lines.
+There are two observed causes (both 2026-10-16, hardware mode); check which
+applies before fixing:
+
+**(a) ES crashed.** ES crashed when the arcade-panel USB encoders were
+unplugged while it was running — `es_log.txt` stops exactly at the two
+`Removed joystick 'DragonRise Inc. Generic USB Joystick'` lines.
 `launch-es.sh` intentionally ends its restart loop when ES exits on its own, so
 nothing relaunches it and the session stays on the black X root window.
+Diagnose: `pgrep -f emulationstation || echo "ES IS DOWN"`.
 
-**Fix:** restart the session (Openbox autostart launches ES again):
+**(b) ES alive but its window stuck unmapped/Iconic** — seen after exiting a
+game. One (or, after repeated sddm restarts, even two) ES processes exist, but
+the screen shows only the black root window. Diagnose:
 ```bash
-pgrep -f emulationstation || echo "ES IS DOWN"
+ps -eo pid,lstart,args | grep "[e]mulationstation"
+DISPLAY=:0 XAUTHORITY=<session xauth> xwininfo -root -tree | grep -i emulation
+# look for: WM state "Iconic" / "Map State: IsUnMapped"
+```
+Background: sddm restarts do **not** always kill the old session's tree. A
+leftover EmulationStation keeps spinning on its dead X connection (30-95% CPU)
+and stale window state can leave the new session black.
+
+**Fix (either cause):** restart the session. The Openbox autostart now reaps
+stale `launch-es.sh`/ES/kiosk/game-server leftovers from previous sessions
+before launching a fresh ES, so restarts are self-cleaning:
+```bash
 echo 1234 | sudo -S systemctl restart sddm
 ```
+If (b) recurs after merely exiting a game (no sddm restart involved), save the
+`ps` and `xwininfo` output above before restarting — that combination has not
+been reproduced in the normal game-exit flow yet.
 
-**Diagnose:** `tail ~/.emulationstation/es_log.txt` — the last lines before a
-sudden stop show what ES was doing when it died.
+**Diagnose crash (a):** `tail ~/.emulationstation/es_log.txt` — the last lines
+before a sudden stop show what ES was doing when it died.
+
+> Note: ES on this box always burns ~a full core (`sched_yield` spin, ~100% in
+> top) on **both** cabinets while its UI is up — pre-existing behavior, not a
+> crash or black-screen cause. Likewise the panels emit ~100 idle ABS events/s
+> of encoder jitter; harmless.
 
 > Note: the panel encoders live on the **hardware mode** cabinet; unplugging
-> them while a game/menu is up can reproduce this. Prefer exiting to a clean
+> them while a game/menu is up can reproduce (a). Prefer exiting to a clean
 > session before rewiring panels.
 
 ## Joy-Con controls wrong / doubled in Chromium
@@ -293,3 +323,38 @@ sudo systemctl restart sddm
 `xsetroot -cursor blank.xbm blank.xbm` will **not** work here — it only changes
 the root-window cursor, and Chromium sets its own per-window cursor over the
 page. Don't use it as a replacement.
+
+## Arcade sound very quiet (HDMI volume at 40%)
+
+**Symptom:** Game audio is very quiet even with the speakers' volume knob at
+maximum (speakers plugged into the screen's headphone jack; audio over HDMI,
+Switch in the dock).
+
+**Cause (2026-10-16, hardware mode):** The PipeWire sink for the HDMI output
+(`alsa_output.platform-70030000.hda.hdmi-stereo`) carries the entire digital
+volume of the HDMI path — the `tegra-hda` card has no hardware gain control —
+and it came up at **40% (−23.9 dB, ~16× quieter)** on a fresh session. The app
+stream (Chromium) was at 100%, so all attenuation was in this sink volume, and
+nothing in userspace persisted it (it can reset or drift between sessions).
+
+**Fix:** The Openbox autostart (mirrored in the repo as
+`config/openbox-autostart`) re-asserts the settled level, **150%**
+(+10.6 dB ≈ 3.4× on PipeWire's cubic curve — 100% was "way better" but still
+a bit too quiet; 150% is right) at every session start, with a retry loop
+while the HDMI sink appears. To check or set it manually (over SSH, export
+`XDG_RUNTIME_DIR=/run/user/$(id -u)` first):
+```bash
+pactl get-sink-volume @DEFAULT_SINK@
+pactl set-sink-volume alsa_output.platform-70030000.hda.hdmi-stereo 150%
+```
+If it is quiet again, also check the per-app stream volume:
+`pactl list sink-inputs | grep -B2 Volume`. Note the software-mode cabinet
+uses the analog sink (`platform-sound.HiFi__…`) instead, a different control.
+
+**Diagnosing "the game is silent" vs "too quiet":** a Chromium stream (and a
+RUNNING sink) only exists while the game actually emits sound — a silent menu
+shows no stream and SUSPENDED sinks, which is normal, and games can stay
+silent until the first input (WebAudio gesture). Test the audio path
+independently with `paplay /usr/share/sounds/alsa/Front_Center.wav`: if the
+tone is audible, the digital chain (sink volume, routing, screen, speakers) is
+fine and the silence is game-side.
