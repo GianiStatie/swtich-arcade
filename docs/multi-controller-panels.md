@@ -333,3 +333,54 @@ ssh switch-sw 'chmod +x ~/scripts/webgame-server.py'
 The web game server restarts on every game launch, so the next game picks up
 the shim automatically (an already-running game keeps the old page until
 relaunch).
+
+## 13. Software-mode cabinet (2026-10-16): different panel wiring, per-cabinet switch
+
+When the two arcade panels were connected to the **software-mode** cabinet
+(dock ports `xusb 1.2` / `1.3`; same USB IDs `0079:0006`, same device names),
+Chromium enumerated them cold as usual (both panels' `event` + `js` nodes open
+in `/proc/<chrome>/fd`), but their **raw button order turned out to differ from
+the hardware cabinet's**: these boards are wired in standard order, so the §12
+shim — built for the hardware cabinet's scramble — *scrambled* this cabinet's
+buttons instead (physical A is raw 0 here; the shim reported it as index 11,
+Start as 3).
+
+Raw capture (passive python-evdev reader on panel 1, one press per labelled
+button, A→Start in order):
+
+| press | code | raw idx | | press | code | raw idx |
+|---|---|---|---|---|---|---|
+| A | 288 | 0 | | LT | 294 | 6 |
+| B | 289 | 1 | | RT | 295 | 7 |
+| X | 290 | 2 | | Select | 296 | 8 |
+| Y | 291 | 3 | | Start | 297 | 9 |
+| LB | 292 | 4 | | | | |
+| RB | 293 | 5 | | | | |
+
+That is exactly the standard Gamepad layout. Cross-check: this cabinet's own
+ES wizard capture (`~/.emulationstation/es_temporaryinput.cfg`, Oct 6) has
+`a=0, b=1, x=2, y=3` — consistent. The two cabinets' panels are different
+encoder boards that happen to share IDs and names.
+
+**Per-cabinet switch — `~/scripts/panel-wiring.conf`** (one word):
+
+| value | cabinet | web shim | bridge panel codes (Select / Start / B) |
+|---|---|---|---|
+| `scrambled` (**default when the file is missing**) | hardware mode | injected (§12) | 290 / 291 / 298 |
+| `standard` | software mode | **not injected** — the raw order is already standard, remapping would break it | 296 / 297 / 289 |
+
+Both scripts read the file on startup (`gamepad-bridge.py` when the process
+starts, `webgame-server.py` at every game launch). The updated scripts were
+deployed to both cabinets on 2026-10-16; only the software cabinet carries the
+file.
+
+**Verified on the software cabinet** with the PadTest page after the change:
+no shim (`DIAG shim_own_prop=false shim_tag_count=0`), raw indices visible —
+A → `b=0` (was 11 with the shim applied), Select → `b=8`, and holding
+Start+Select → `b=8,9` → the bridge exited the game. Chromium held both panels
+open throughout (`/proc/<chrome>/fd`: `event6`+`js0` for `:1.2`,
+`event7`+`js1` for `:1.3` on this boot).
+
+**Side observation (same evening):** the Start+Select exit left ES running
+but its window `Iconic` → black screen. Recovery is documented in
+`docs/troubleshooting.md` ("Cabinet screen is black", case (b)).

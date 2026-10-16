@@ -27,18 +27,25 @@ apart by name:
 
 | | **hardware mode** | **software mode** |
 |---|---|---|
-| Difference | has the two arcade-panel USB encoders | Joy-Cons only, no panels |
 | Board serial (`/proc/device-tree/serial-number`) | `NXO-2EDABE7E-30080F` | `NXO-30D61FFC-30020F` |
 | WiFi MAC (`/sys/class/net/wlp1s0/address`) | `98:b6:e9:25:41:83` | `98:b6:e9:29:e0:05` |
 | WiFi IP (static, set 2026-10-16) | `192.168.50.219` | `192.168.50.75` |
-| Panels | 2× DragonRise encoders (USB `0079:0006`) on the dock hub | — |
+| Panels (both docks since 2026-10-16) | 2× DragonRise encoders (USB `0079:0006`) on the dock hub; raw button order **scrambled** — remapped by the in-page web shim | 2× DragonRise encoders on the dock hub; raw button order **standard** — no shim (`panel-wiring.conf` = `standard`) |
+
+The old way to tell the units apart was the presence of panels; since
+2026-10-16 both cabinets have their two panels connected. What still differs
+is the panels' raw button wiring (the two cabinets' encoder boards happen to
+be different): the hardware cabinet's boards are scrambled and rely on the
+shim, the software cabinet's are standard-ordered. See
+[Multi-player arcade panels](multi-controller-panels.md) §13 and the
+`panel-wiring.conf` entry below.
 
 Identify whichever unit you're on in one line:
 
 ```bash
 cat /proc/device-tree/serial-number; echo
 cat /sys/class/net/wlp1s0/address
-lsusb | grep 0079    # two hits = panels plugged in (hardware mode, docked)
+lsusb | grep 0079    # two hits = panels plugged in (docked; both cabinets)
 ```
 
 ### Connecting from a new PC
@@ -84,10 +91,10 @@ option.
 
 Both cabinets have a saved profile for the phone hotspot
 (`Botocera`, added 2026-10-16) with `autoconnect-priority: -5`, so they join it
-automatically whenever no better known network is in range (home is `10`,
-"Viata cu Digi" is `0`; the hotspot loses to both and is only used when it is
-the sole known network available). The SSID is **case-sensitive** — the
-profile was first saved as `botocera` (as casually dictated) and had to be
+automatically whenever no better known network is in range (home `10` >
+"Viata cu Digi" `0` > ClujStartupGuest `-1` > hotspot `-5`; the hotspot is
+only used when it is the sole known network available). The SSID is
+**case-sensitive** — the profile was first saved as `botocera` (as casually dictated) and had to be
 corrected to the hotspot's actual `Botocera`. To repeat this on another unit:
 
 ```bash
@@ -107,6 +114,30 @@ use `nmcli dev wifi` (or `wpa_cli -i wlp1s0 scan`/`scan_results` for the raw
 supplicant view) — note `iw` is **not installed** on the units. Both units
 scan 2.4 GHz (incl. ch 12–13) and 5 GHz fine.
 
+### WiFi: ClujStartupGuest (co-working space)
+
+Added 2026-10-16 to **both** units with `autoconnect-priority: -1` (see the
+priority order above). The AP is WPA2/WPA3 *mixed*, so the profile uses plain
+`wpa-psk` — no SAE needed. Created with the same pattern as the hotspot:
+
+```bash
+echo 1234 | sudo -S -p "" nmcli connection add type wifi con-name ClujStartupGuest \
+  ssid ClujStartupGuest wifi-sec.key-mgmt wpa-psk wifi-sec.psk 'CSGuest2025' \
+  connection.autoconnect yes connection.autoconnect-priority -1
+```
+
+Addresses are DHCP (`192.168.11.x`, gateway `.1`) — nothing static, so they
+drift. Live leases 2026-10-16: hardware mode `192.168.11.53`, software mode
+`192.168.11.41`. SSH from the work PC is key-based (`id_ed25519_arcade`;
+password `1234` still works as fallback) with aliases `switch-cluj`
+(hardware) / `switch-cluj-sw` (software).
+
+**USB caveat when both units are around:** they present the *same* gadget
+network (`192.168.55.1`, PC side `192.168.55.100/24`) but with *different*
+host keys. Cable them one at a time, and give the USB link its own throwaway
+`UserKnownHostsFile` (or `accept-new` on a first connect) — otherwise the
+known_hosts entry from one unit fails verification for the other.
+
 ## Deployed files
 
 | Path (on this repo) | Deployed to (on Switch) | Purpose |
@@ -114,11 +145,11 @@ scan 2.4 GHz (incl. ch 12–13) and 5 GHz fine.
 | `scripts/launch-es.sh` | `~/scripts/launch-es.sh` | Launch ES in kiosk mode (Konami code unlocks admin UI) |
 | `scripts/uimode-watcher.py` | `~/scripts/uimode-watcher.py` | Forces ES restart on Konami unlock so the RetroPie menu reappears |
 | `scripts/launch-web-game.sh` | `~/scripts/launch-web-game.sh` | Launch a web game in Chromium kiosk |
-| `scripts/webgame-server.py` | `~/scripts/webgame-server.py` | Per-game HTTP server (started by `launch-web-game.sh`): no-store, COOP/COEP, `.wasm` MIME, `.br`/`.gz` sidecar serving; injects the arcade pad shim into every HTML page |
+| `scripts/webgame-server.py` | `~/scripts/webgame-server.py` | Per-game HTTP server (started by `launch-web-game.sh`): no-store, COOP/COEP, `.wasm` MIME, `.br`/`.gz` sidecar serving; injects the arcade pad shim into every HTML page on scrambled-wiring cabinets (see `panel-wiring.conf` below) |
 | `scripts/arcade-pad-shim.js` | `~/scripts/arcade-pad-shim.js` | In-page remap of the arcade panels' buttons to standard Gamepad API indices (served/injected by `webgame-server.py`) |
 | `scripts/exit-server.py` | `~/scripts/exit-server.py` | HTTP on `:8123`; powers in-game Quit buttons (`/exit`) |
 | `scripts/exit-to-es.sh` | `~/scripts/exit-to-es.sh` | Kill Chromium + relaunch ES |
-| `scripts/gamepad-bridge.py` | `~/scripts/gamepad-bridge.py` | Joy-Con → keyboard bridge + Start+Select force-quit + Start+Select+B panic reboot; also watches the arcade panels passively (no grab) for the same combos |
+| `scripts/gamepad-bridge.py` | `~/scripts/gamepad-bridge.py` | Joy-Con → keyboard bridge + Start+Select force-quit + Start+Select+B panic reboot; also watches the arcade panels passively (no grab) for the same combos, with panel button codes selected by `panel-wiring.conf` |
 | `scripts/sync-itch-games.sh` | `~/scripts/sync-itch-games.sh` | Manual re-sync of games from `itch-games.yaml` (fallback) |
 | `scripts/download-from-itch.sh` | `~/scripts/download-from-itch.sh` | Fetch a named upload from itch.io via API |
 | `scripts/itch-watcher.py` | `~/scripts/itch-watcher.py` | Poll the itch collection; auto-install updates / prune / restart ES |
@@ -142,12 +173,20 @@ scan 2.4 GHz (incl. ch 12–13) and 5 GHz fine.
 |---|---|
 | `/etc/default/unclutter` | `START_UNCLUTTER="true"`, `EXTRA_OPTS="--timeout 1 --start-hidden"` |
 
+### Per-cabinet state (not from repo)
+
+| File | Purpose |
+|---|---|
+| `~/scripts/panel-wiring.conf` | One word selecting the panels' raw button order: `standard` on the software-mode cabinet (pads are already standard-ordered — the shim is **not** injected); the file is **absent** on the hardware-mode cabinet, which keeps the default `scrambled` (shim remaps). Read by `webgame-server.py` and `gamepad-bridge.py`; see [Multi-player arcade panels](multi-controller-panels.md) §13 |
+
 ## Quick reference
 
 - **SSH:** over WiFi — `ssh switch-hw` (hardware mode) / `ssh switch-sw`
   (software mode), user `tagap`, key-based (password fallback). `ssh switch`
   (`192.168.55.1`) is the legacy USB gadget link and only exists while the unit
   is cabled to the PC in device mode.
+  - At a co-working space: `ssh switch-cluj` (hardware) / `ssh switch-cluj-sw`
+    (software) — DHCP leases, see the "ClujStartupGuest" WiFi section above.
   - USB link fix (Oct 6): the gadget interface name can change between ports
     (`enp7s0f3u2` on the current dock port); when a new default
     `Wired connection N` sticks in DHCP, set it static:
@@ -160,7 +199,9 @@ scan 2.4 GHz (incl. ch 12–13) and 5 GHz fine.
   `~/scripts/sync-itch-games.sh --restart-es` on the Switch.
 - **Controls in games:** the Joy-Cons are read by `gamepad-bridge.py` and
   injected as keyboard keys (D-pad → arrows, A → Space, B → R). See
-  [Web Games setup](web-games-setup.md) for the mapping.
+  [Web Games setup](web-games-setup.md) for the mapping. The arcade panels
+  reach games as standard-mapped controllers — remapped in-page by the shim on
+  the hardware cabinet, already standard-ordered on the software cabinet.
 - **Exit a game:** press **Start + Select** (handled by the gamepad bridge,
   works for any game). If the game is frozen solid, **Start + Select + B**
   reboots the cabinet. The in-game QUIT button does **not** work for Godot web

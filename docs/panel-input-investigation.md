@@ -6,6 +6,12 @@ Written so a future session can repeat this without re-living the dead ends.
 The shipped solution is documented in
 [`multi-controller-panels.md`](multi-controller-panels.md) §12.
 
+> **Update (2026-10-16, later):** these notes are specific to the
+> *hardware-mode* cabinet. On the *software-mode* cabinet the same-model
+> panels turned out to be wired in standard order (no remap needed) — see
+> [`multi-controller-panels.md`](multi-controller-panels.md) §13 for the
+> per-cabinet `panel-wiring.conf` switch.
+
 **Outcome in one line:** the panels' raw button order is non-standard, Chromium
 reports it verbatim, and no host-side trick fixed that reliably — so the remap
 was moved **into the served web page** (a shim injected by `webgame-server.py`)

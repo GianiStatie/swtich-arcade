@@ -7,6 +7,22 @@
 <div id="out">waiting for gamepads...</div>
 <script>
 var last = "";
+function beacon(d) {
+  var img = new Image();
+  img.src = "http://127.0.0.1:8130/r?d=" + encodeURIComponent(d) + "&n=" + Date.now();
+}
+// Resource-load and runtime errors (e.g. the injected shim failing to load).
+window.addEventListener("error", function (e) {
+  var t = e.target || {};
+  beacon("ERR msg=" + (e.message || "") + " src=" + (t.src || "") +
+         " tag=" + (t.tagName || ""));
+}, true);
+// Shim diagnostics: own-property patch on navigator + whether the tag is in the DOM.
+(function () {
+  var own = !!Object.getOwnPropertyDescriptor(navigator, "getGamepads");
+  var tags = document.querySelectorAll('script[src="/__arcade_pad_shim.js"]').length;
+  beacon("DIAG shim_own_prop=" + own + " shim_tag_count=" + tags);
+})();
 function snapshot() {
   var pads = navigator.getGamepads ? navigator.getGamepads() : [];
   var parts = [];
@@ -30,9 +46,7 @@ setInterval(function () {
     last = s;
     document.getElementById("out").textContent =
       new Date().toLocaleTimeString() + "\n" + s;
-    var img = new Image();
-    img.src = "http://127.0.0.1:8130/r?d=" + encodeURIComponent(s) +
-              "&n=" + Date.now();
+    beacon(s);
   }
 }, 100);
 </script>

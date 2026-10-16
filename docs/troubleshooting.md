@@ -114,10 +114,12 @@ There is also a plain-HTML Quit button path for simple games.
    ```
    The bridge reads the Combined Joy-Cons (`/dev/input/event8`) continuously.
    evdev codes: `BTN_START=315`, `BTN_SELECT=314` on the Combined Joy-Cons.
-   On the hardware-mode cabinet the same combo also works from **either arcade
-   panel**: the bridge watches the DragonRise encoders *passively* (never
-   grabs — Chromium keeps them for the gamepad shim). Panel codes: Start=291,
-   Select=290, B=298; on success the log shows
+   On the cabinets with arcade panels the same combo also works from **either
+   arcade panel**: the bridge watches the DragonRise encoders *passively*
+   (never grabs — Chromium keeps them for the gamepad shim). Panel codes:
+   Start=291, Select=290, B=298 (hardware-mode wiring; software mode:
+   Start=297, Select=296, B=289 — selected by `~/scripts/panel-wiring.conf`,
+   see `multi-controller-panels.md` §13); on success the log shows
    `Quit combo pressed (panel); exiting game.` (added + verified 2026-10-16).
 
 2. **In-game Quit button** (plain HTML games only) — the game's Quit button
@@ -197,7 +199,20 @@ the screen shows only the black root window. Diagnose:
 ps -eo pid,lstart,args | grep "[e]mulationstation"
 DISPLAY=:0 XAUTHORITY=<session xauth> xwininfo -root -tree | grep -i emulation
 # look for: WM state "Iconic" / "Map State: IsUnMapped"
+# xprop -id <es-win> WM_STATE      # "window state: Iconic"
 ```
+**Reproduced (2026-10-16, software cabinet):** after leaving a game with
+Start+Select (that game had been launched manually over SSH, not from the ES
+menu), ES was alive but its window sat at `WM_STATE=Iconic` and the screen
+stayed on the black root window. Lighter fix than an sddm restart: 
+```bash
+touch /tmp/es-restart
+kill -TERM <es-pid>     # use the ES pid from the ps output above
+```
+`launch-es.sh`'s restart loop (the same path the Konami-code restart uses)
+relaunches ES and the new window comes back `IsViewable`. Note:
+`xdotool`/`wmctrl` are **not installed** on the units, so the stuck window
+cannot be re-mapped in place — the restart is the only fix.
 Background: sddm restarts do **not** always kill the old session's tree. A
 leftover EmulationStation keeps spinning on its dead X connection (30-95% CPU)
 and stale window state can leave the new session black.
@@ -209,8 +224,10 @@ before launching a fresh ES, so restarts are self-cleaning:
 echo 1234 | sudo -S systemctl restart sddm
 ```
 If (b) recurs after merely exiting a game (no sddm restart involved), save the
-`ps` and `xwininfo` output above before restarting — that combination has not
-been reproduced in the normal game-exit flow yet.
+`ps` and `xwininfo`/`xprop` output above before restarting. Seen once on
+2026-10-16 (software cabinet) in the exit flow of a game launched manually
+over SSH (see above); whether the normal ES-menu launch → Start+Select exit
+path can hit it is still unknown.
 
 **Diagnose crash (a):** `tail ~/.emulationstation/es_log.txt` — the last lines
 before a sudden stop show what ES was doing when it died.

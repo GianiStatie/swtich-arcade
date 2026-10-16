@@ -23,10 +23,12 @@ Panic combos (work even when the game/X are frozen):
   Start + Select     exit game back to EmulationStation
   Start + Select + B reboot the cabinet
 
-On the hardware-mode cabinet the same combos also work from either arcade
-panel: a second, passive watcher reads the DragonRise encoders without
-grabbing them (Chromium must keep them for the in-page gamepad shim).
+On cabinets with arcade panels (see panel-wiring.conf for the per-cabinet raw
+order) the same combos also work from either arcade panel: a second, passive
+watcher reads the DragonRise encoders without grabbing them (Chromium must
+keep them for the in-page gamepad shim).
 """
+import os
 import select
 import signal
 import subprocess
@@ -70,15 +72,37 @@ SELECT_BUTTON = 314 # BTN_SELECT
 RESET_BUTTON = 305  # BTN_EAST (B) — also the third panic button
 QUIT_SCRIPT = "/home/tagap/scripts/exit-to-es.sh"
 
-# --- Arcade panel panic combos (hardware-mode cabinet only) -----------------
+# --- Arcade panel panic combos ----------------------------------------------
 # The DragonRise encoders must stay readable by Chromium (the in-page gamepad
 # shim relies on it), so the panel watcher is passive — it never grabs.
-# Raw button -> evdev code on the panels: 2=Select -> 290, 3=Start -> 291,
-# 10=B -> 298 (code = 288 + raw index; see docs/panel-input-investigation.md).
+# The two cabinets' panels share USB IDs but not their raw button order;
+# panel-wiring.conf next to this script selects the right raw codes
+# ("scrambled" default = hardware mode, "standard" = software mode).
+# Code = 288 + raw index; see docs/panel-input-investigation.md.
 PANEL_NAME = "DragonRise"
-PANEL_SELECT = 290
-PANEL_START = 291
-PANEL_RESET = 298
+
+
+def _panel_wiring():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "panel-wiring.conf")
+    try:
+        with open(path) as f:
+            value = f.read().strip().lower()
+    except OSError:
+        value = ""
+    return value if value in ("standard", "scrambled") else "scrambled"
+
+
+if _panel_wiring() == "standard":
+    # Software-mode cabinet: physical Select/Start/B are raw 8/9/1.
+    PANEL_SELECT = 296
+    PANEL_START = 297
+    PANEL_RESET = 289
+else:
+    # Hardware-mode cabinet (scrambled raw order): Select/Start/B = raw 2/3/10.
+    PANEL_SELECT = 290
+    PANEL_START = 291
+    PANEL_RESET = 298
 
 # Panic combos (state-based; work even when the game/X/GPU are frozen,
 # because we read evdev directly):
