@@ -301,7 +301,7 @@ longer needs manual edits for day-to-day changes.
 
 ### How it works
 
-1. Every `poll_seconds` (60 s default) it fetches
+1. Every `poll_seconds` (300 s default, plus jitter) it fetches
    `https://api.itch.io/collections/<id>/collection-games` (Bearer = the API
    key in `~/.config/itch_api_key`), paginated.
 2. For each game it fetches uploads from the legacy v1 API
@@ -309,9 +309,11 @@ longer needs manual edits for day-to-day changes.
    you don't own**, no download keys needed. It picks the HTML build
    (`type == "html"`, fallback `-web` in the filename; newest by
    `updated_at` if several exist).
-3. Change detection is per-upload `md5_hash`/`updated_at` (and install-folder
-   existence) vs `~/arcade_games/.itch-state.json`. State is written only
-   after a successful install, so failures retry next poll.
+3. Change detection is per-upload `md5_hash`/`updated_at`/`build.id` (and
+   install-folder existence) vs `~/arcade_games/.itch-state.json`. State is
+   written only after a successful install, so failures retry next poll.
+   A 429 aborts the cycle and backs off (honoring `Retry-After`), so a
+   rate-limited watcher does not keep hammering the API.
 4. **Idle gate:** if Chromium is running (a game is being played), the sync
    (and prune, and the ES restart) is deferred to the next cycle. A game in
    progress is never touched.
@@ -332,7 +334,7 @@ longer needs manual edits for day-to-day changes.
 ```yaml
 collection: 8014540      # LimitTestArcade
 prune: true
-poll_seconds: 60
+poll_seconds: 300
 restart_es: true
 games: []                # optional overrides (pin/exclude/rename by itch id)
 ```

@@ -192,8 +192,8 @@ known_hosts entry from one unit fails verification for the other.
     `Wired connection N` sticks in DHCP, set it static:
     `nmcli con mod "Wired connection 4" ipv4.method manual ipv4.addresses 192.168.55.100/24`
 - **Add a game:** add it to the itch.io collection (e.g. *LimitTestArcade*,
-  id 8014540) — the watcher installs it within ~1 minute of the next idle
-  poll and restarts ES. No SSH needed.
+  id 8014540) — the watcher installs it on the next idle poll (default
+  ~5 minutes) and restarts ES. No SSH needed.
 - **Update a game:** re-upload the web.zip on itch.io — same flow as adding.
 - **Manual sync fallback:** edit `config/itch-games.yaml`, run
   `~/scripts/sync-itch-games.sh --restart-es` on the Switch.

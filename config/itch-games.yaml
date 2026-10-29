@@ -1,8 +1,9 @@
 # itch.io collection sync config for the arcade watcher
 #
 # The watcher (scripts/itch-watcher.py on the Switch) polls one itch.io
-# collection every `poll_seconds` and mirrors it onto the cabinet:
-#   * game added to the collection      -> installed within a minute
+# collection every `poll_seconds` (plus jitter) and mirrors it onto the
+# cabinet. It backs off on HTTP 429 instead of retrying in a tight loop:
+#   * game added to the collection      -> installed on the next idle poll
 #   * game's web build re-uploaded      -> re-downloaded (md5 changed)
 #   * game removed from the collection  -> uninstalled (prune: true)
 # Changes are applied only while no game is running (Chromium closed);
@@ -14,7 +15,7 @@
 
 collection: 8014540      # LimitTestArcade
 prune: true
-poll_seconds: 60
+poll_seconds: 300
 restart_es: true
 
 # Optional per-game overrides, matched by itch game id:

@@ -22,11 +22,14 @@ API notes (probed 2026-10-06, from the Switch):
   * Legacy API (itch.io/api/1/<key>/...) resolves uploads for games you don't
     own (free games), plus the signed download URL per upload.
   * Pick the web build by upload type == "html" (fallback: -web- filename).
+  * HTTP 429 is honored: Retry-After/exponential backoff, and the rest of the
+    cycle is skipped so the watcher does not keep hammering the API.
 
 Config: <GAMES_ROOT>/itch-games.yaml (see config/itch-games.yaml in the repo):
   collection: 8014540     # itch.io collection id (required)
   prune: true             # uninstall games removed from the collection
-  poll_seconds: 60        # minutes are fine; this is seconds
+  poll_seconds: 300       # seconds between polls (updates appear on the
+                          # first idle poll after an upload)
   restart_es: true        # restart EmulationStation after a change
   games: []               # optional per-game overrides:
                           #   itch: <game id>   the game this applies to
@@ -42,15 +45,19 @@ Usage: python3 itch-watcher.py [--once] [--force]
 
 import json
 import os
+import random
 import shutil
 import signal
 import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 try:
     import yaml
@@ -61,6 +68,11 @@ API_BASE = "https://api.itch.io"
 LEGACY_BASE = "https://itch.io/api/1"
 STATE_FILE = ".itch-state.json"
 
+RATE_LIMIT_FLOOR = 30
+RATE_LIMIT_CAP = 900
+GAME_REQUEST_DELAY = 1.0
+GAME_REQUEST_JITTER = 0.5
+
 GAMES_ROOT = os.environ.get("GAMES_ROOT", "/home/tagap/arcade_games")
 CONFIG_PATH = os.environ.get("CONFIG_PATH",
                              os.path.join(GAMES_ROOT, "itch-games.yaml"))
@@ -69,6 +81,51 @@ KEY_FILE = os.environ.get("ITCH_API_KEY_FILE",
 
 CHROME_PATTERNS = ("/opt/chromium.org/chromium/chrome",)
 CHROME_CHECK_TTL = 5.0
+
+
+class RateLimited(Exception):
+    def __init__(self, retry_after=None, message="rate limited"):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+def _retry_after_seconds(value):
+    if not value:
+        return None
+    try:
+        return max(1, int(float(value)))
+    except (TypeError, ValueError):
+        pass
+    try:
+        when = parsedate_to_datetime(value)
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        return max(1, int((when - datetime.now(timezone.utc)).total_seconds()))
+    except Exception:
+        return None
+
+
+def _rate_limit_backoff(retry_after, streak):
+    if retry_after is not None:
+        delay = retry_after
+    else:
+        delay = RATE_LIMIT_FLOOR * (2 ** min(streak, 6))
+    delay = max(RATE_LIMIT_FLOOR, min(RATE_LIMIT_CAP, delay))
+    return delay + random.uniform(0, min(30.0, delay * 0.1))
+
+
+def _sleep_interruptible(seconds, running):
+    deadline = time.monotonic() + seconds
+    while running["flag"]:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return True
+        time.sleep(min(0.25, remaining))
+    return False
+
+
+def _pace_requests():
+    time.sleep(GAME_REQUEST_DELAY + random.uniform(0, GAME_REQUEST_JITTER))
 
 
 def log(msg):
@@ -87,15 +144,27 @@ def http_json(url, key=None, timeout=20):
     req = urllib.request.Request(url)
     if key and url.startswith(API_BASE):
         req.add_header("Authorization", "Bearer " + key)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.load(resp)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.load(resp)
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            raise RateLimited(_retry_after_seconds(
+                e.headers.get("Retry-After")), "HTTP 429") from e
+        raise
 
 
 def download_to(url, dest, timeout=600):
     req = urllib.request.Request(url)
-    with urllib.request.urlopen(req, timeout=timeout) as resp, \
-            open(dest, "wb") as f:
-        shutil.copyfileobj(resp, f)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp, \
+                open(dest, "wb") as f:
+            shutil.copyfileobj(resp, f)
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            raise RateLimited(_retry_after_seconds(
+                e.headers.get("Retry-After")), "HTTP 429") from e
+        raise
 
 
 # --------------------------------------------------------------------------
@@ -198,6 +267,8 @@ def html_upload(game_id, key):
     url = "%s/%s/game/%d/uploads" % (LEGACY_BASE, key, game_id)
     try:
         data = http_json(url)
+    except RateLimited:
+        raise
     except Exception as e:
         log("game %d: uploads fetch failed: %s" % (game_id, e))
         return None
@@ -221,6 +292,8 @@ def download_upload_key(game_id, upload_id, key):
     url = "%s/%s/upload/%d/download" % (LEGACY_BASE, key, upload_id)
     try:
         data = http_json(url)
+    except RateLimited:
+        raise
     except Exception:
         data = None
     if data and data.get("url"):
@@ -247,6 +320,8 @@ def install_game(game_id, title, upload, key, web_dir, dl_dir):
         zpath = os.path.join(tmp, "web.zip")
         try:
             download_to(signed, zpath)
+        except RateLimited:
+            raise
         except Exception as e:
             log("%s: download failed: %s" % (name, e))
             return None
@@ -287,12 +362,22 @@ def install_game(game_id, title, upload, key, web_dir, dl_dir):
         with open(marker, "w") as f:
             f.write("")
 
-    log("%s: installed (%d bytes upload, md5 %s...)" % (
-        name, upload.get("size", 0), (upload.get("md5_hash") or "")[:8]))
+    build = upload.get("build") or {}
+    md5 = upload.get("md5_hash")
+    if md5:
+        ident = "md5 %s..." % md5[:8]
+    elif build.get("version") is not None:
+        ident = "build v%s" % build["version"]
+    else:
+        ident = "no md5/build"
+    log("%s: installed (%d bytes upload, %s)" % (
+        name, upload.get("size", 0), ident))
     return {
-        "md5": upload.get("md5_hash"),
+        "md5": md5,
         "updated_at": upload.get("updated_at"),
         "upload_id": upload.get("id"),
+        "build_id": build.get("id"),
+        "build_version": build.get("version"),
         "title": title,
     }
 
@@ -377,6 +462,8 @@ def sync_once(cfg, key, state, force=False):
             url = "%s/%s/game/%d/uploads" % (LEGACY_BASE, key, game_id)
             try:
                 got = http_json(url).get("uploads", [])
+            except RateLimited:
+                raise
             except Exception:
                 got = []
             match = [u for u in got
@@ -385,14 +472,18 @@ def sync_once(cfg, key, state, force=False):
             if up is None:
                 log("%s: override upload %r not found on itch" % (
                     name, ov["upload"]))
+        _pace_requests()
         if up is None:
             unresolved.add(name)
             continue
+        build = up.get("build") or {}
         uploads_cache[game_id] = up
         wanted[name] = {
             "md5": up.get("md5_hash"),
             "updated_at": up.get("updated_at"),
             "upload_id": up.get("id"),
+            "build_id": build.get("id"),
+            "build_version": build.get("version"),
             "title": meta["title"],
         }
         prev = state.get("games", {}).get(name)
@@ -400,7 +491,9 @@ def sync_once(cfg, key, state, force=False):
                 os.path.join(web_dir, name, "index.html"))):
             changed.append((name, game_id, up, "new/missing"))
         elif (prev.get("md5") != up.get("md5_hash")
-                or prev.get("updated_at") != up.get("updated_at")):
+                or prev.get("updated_at") != up.get("updated_at")
+                or (prev.get("build_id") is not None
+                    and prev.get("build_id") != build.get("id"))):
             changed.append((name, game_id, up, "updated on itch"))
 
     # prune: installed games no longer in the collection
@@ -459,12 +552,23 @@ def main():
     log("itch watcher: collection %d, poll %ds" % (
         cfg["collection"], cfg["poll_seconds"]))
 
+    rate_limit_streak = 0
     while running["flag"]:
         try:
             did = sync_once(cfg, key, state, force=force)
             force = False
+            rate_limit_streak = 0
             if did and cfg["restart_es"] and not game_running():
                 restart_es()
+        except RateLimited as e:
+            rate_limit_streak += 1
+            wait = _rate_limit_backoff(e.retry_after, rate_limit_streak)
+            log("rate limited by itch; backing off %.0fs (%s)" % (wait, e))
+            if run_once:
+                break
+            if not _sleep_interruptible(wait, running):
+                break
+            continue
         except RuntimeError as e:
             log("config error: %s" % e)
             break
@@ -472,10 +576,10 @@ def main():
             log("cycle error: %r" % e)
         if run_once:
             break
-        for _ in range(cfg["poll_seconds"] * 4):
-            if not running["flag"]:
-                break
-            time.sleep(0.25)
+        delay = cfg["poll_seconds"] + random.uniform(
+            0, max(1.0, cfg["poll_seconds"] * 0.1))
+        if not _sleep_interruptible(delay, running):
+            break
 
     log("itch watcher stopped")
 
