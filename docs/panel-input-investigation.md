@@ -59,8 +59,9 @@ and verified working.
   and exposes buttons **in ascending raw code order** ("STANDARD GAMEPAD"
   label, `m="standard"`). Physical A (code 299) therefore appears as index 11
   (R3), and everything lands wrong.
-- The Joy-Cons are unaffected because `gamepad-bridge.py` grabs them and
-  re-injects keyboard; only the panels were exposed raw.
+- The Joy-Cons are handled by `gamepad-bridge.py` (keyboard injection) and are
+  hidden from the page Gamepad API by the same shim. Chromium can still see the
+  paired `js` node, so the grab alone is not enough to keep them out of a page.
 
 **Raw order (js id = code − 288):**
 

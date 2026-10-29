@@ -29,9 +29,14 @@ The only Switch-side input path is `scripts/gamepad-bridge.py`. It is
   `evdev.list_devices()` and returns the **first** device whose name contains
   `"Combined Joy-Cons"`. Everything else is ignored and closed.
 - While Chromium runs it takes an exclusive grab, `dev.grab()`
-  (`scripts/gamepad-bridge.py:273`), i.e. `EVIOCGRAB`. That grab is the only
-  thing that keeps a device out of Chromium's W3C Gamepad API — **an X config
+  (`scripts/gamepad-bridge.py:273`), i.e. `EVIOCGRAB`, which stops other evdev
+  readers. Chromium can still enumerate the paired `js` node, so the injected
+  page shim hides the Combined Joy-Cons from the W3C Gamepad API; **an X config
   cannot do this** (see `docs/troubleshooting.md:192`).
+- The same page shim hides the unused Combined Joy-Cons from
+  `navigator.getGamepads()` / `gamepadconnected`, so engines such as Unity's
+  Input System do not log an unsupported-device error and open their native
+  development console.
 - It translates the Joy-Cons to **keyboard** keys via `/dev/uinput`
   (`BTN_TO_KEY`, `scripts/gamepad-bridge.py:39`) and injects them. Games are
   expected to read keyboard only.
@@ -397,8 +402,8 @@ used above (one labelled press per code), or read the ES wizard capture
 
 | value | cabinet | web shim | bridge panel codes (Select / Start / B) |
 |---|---|---|---|
-| `scrambled` (**default when the file is missing**) | hardware mode | injected (§12) | 290 / 291 / 298 |
-| `standard` | software mode | **not injected** — the raw order is already standard, remapping would break it | 296 / 297 / 289 |
+| `scrambled` (**default when the file is missing**) | hardware mode | injected; remaps panels (§12); hides Joy-Cons | 290 / 291 / 298 |
+| `standard` | software mode | injected but does not remap; hides Joy-Cons | 296 / 297 / 289 |
 
 Both scripts read the file on startup (`gamepad-bridge.py` when the process
 starts, `webgame-server.py` at every game launch). The updated scripts were
@@ -406,11 +411,13 @@ deployed to both cabinets on 2026-10-16; only the software cabinet carries the
 file.
 
 **Verified on the software cabinet** with the PadTest page after the change:
-no shim (`DIAG shim_own_prop=false shim_tag_count=0`), raw indices visible —
-A → `b=0` (was 11 with the shim applied), Select → `b=8`, and holding
-Start+Select → `b=8,9` → the bridge exited the game. Chromium held both panels
-open throughout (`/proc/<chrome>/fd`: `event6`+`js0` for `:1.2`,
-`event7`+`js1` for `:1.3` on this boot).
+the shim was absent at the time, so raw indices were visible — A → `b=0` (was
+11 with the shim applied), Select → `b=8`, and holding Start+Select → `b=8,9`
+→ the bridge exited the game. Chromium held both panels open throughout
+(`/proc/<chrome>/fd`: `event6`+`js0` for `:1.2`, `event7`+`js1` for `:1.3` on
+this boot). The server now injects the shim on both wiring modes with
+`data-wiring="standard"`; it leaves panel indices alone and filters the
+unused Joy-Cons.
 
 **Side observation (same evening):** the Start+Select exit left ES running
 but its window `Iconic` → black screen. Recovery is documented in

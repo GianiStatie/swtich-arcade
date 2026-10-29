@@ -70,7 +70,9 @@ Player 2 is index 1.
 
 **Joy-Cons → keyboard.** The built-in Joy-Cons are read by a gamepad bridge
 and injected as keyboard keys, so games can also (or instead) use standard
-keyboard input:
+keyboard input. The page shim hides the unused Combined Joy-Cons from the
+Gamepad API, so engines such as Unity do not try to create an unsupported
+device and open a native development console:
 
 | Control | Key |
 |---|---|

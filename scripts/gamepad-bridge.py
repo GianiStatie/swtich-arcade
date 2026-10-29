@@ -12,9 +12,10 @@ Key design:
   * Analog stick mapped to directions only past a deadzone, so drift never
     produces a phantom direction.
   * Start + SELECT together calls exit-to-es.sh (returns to EmulationStation).
-  * Chromium's W3C Gamepad API does NOT expose the Joy-Cons (numpads=0), so
-    injecting keyboard keys is the only input path and the game needs no
-    gamepad mapping.
+  * Chromium can still enumerate the Joy-Cons through the paired joydev node
+    even while the evdev node is grabbed. The injected page shim hides that
+    unused gamepad from games, so injecting keyboard keys remains the input
+    path and the game needs no gamepad mapping.
 
 Usage: gamepad-bridge.py   (runs forever; SIGTERM/SIGINT to stop)
 Requires: python3-evdev, /dev/uinput writable (tagap is in the 'input' group).
@@ -379,7 +380,7 @@ def main():
 
             print("Game detected; grabbing controller.", flush=True)
             try:
-                dev.grab()   # exclusive grab: blocks Chromium's gamepad API
+                dev.grab()   # keep the keyboard bridge as the input path
                 _inject_events(ui, dev)
             except (OSError, IOError) as exc:
                 print("grab/inject error: %s" % exc, flush=True)

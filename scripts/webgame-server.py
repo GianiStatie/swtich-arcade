@@ -16,12 +16,14 @@
 # not the Switch), with Vary: Accept-Encoding so nothing gets cached wrongly.
 # .wasm is served as application/wasm so Chromium can stream-compile it.
 #
-# On cabinets whose panels report their buttons in a raw (non-standard) order
-# — the hardware-mode cabinet — every served HTML page gets the arcade pad shim
-# injected: Chromium reports unknown pads in raw order, so the shim remaps the
-# panel buttons to standard indices for all games. On cabinets whose panels are
-# already standard-ordered (software mode) the injection is skipped entirely;
-# see panel-wiring.conf below.
+# Every served HTML page gets the arcade gamepad shim. It hides the unused
+# Combined Joy-Cons from the page (otherwise Unity's Input System logs an error
+# and opens its native development console), and on cabinets whose panels
+# report their buttons in a raw (non-standard) order — the hardware-mode
+# cabinet — it remaps the panel buttons to standard Gamepad API indices. On
+# cabinets whose panels are already standard-ordered (software mode) the shim
+# still hides the Joy-Cons but does not remap the panels; see
+# panel-wiring.conf below.
 #
 # Usage: webgame-server.py <port> <game-dir>
 
@@ -43,15 +45,14 @@ ENCODINGS = (("br", ".br"), ("gzip", ".gz"))
 SHIM_ROUTE = "/__arcade_pad_shim.js"
 SHIM_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          "arcade-pad-shim.js")
-SHIM_TAG = b'<script src="' + SHIM_ROUTE.encode() + b'"></script>'
 
 # Per-cabinet panel wiring. The two cabinets' arcade panels share USB IDs but
 # not their raw button order:
 #   "scrambled" (default) — the hardware-mode cabinet: the raw order is
 #                            scrambled; the shim remaps it to standard.
 #   "standard"            — the software-mode cabinet: the raw order already
-#                            matches the standard Gamepad layout, so remapping
-#                            would break the buttons — no shim is injected.
+#                            matches the standard Gamepad layout, so the shim
+#                            must not remap the buttons.
 # One word in panel-wiring.conf next to this script selects the behavior; a
 # missing or invalid file keeps the historical default ("scrambled").
 WIRING_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -68,7 +69,8 @@ def _panel_wiring():
 
 
 PANEL_WIRING = _panel_wiring()
-INJECT_SHIM = PANEL_WIRING == "scrambled"
+SHIM_TAG = (b'<script src="' + SHIM_ROUTE.encode() + b'" data-wiring="' +
+            PANEL_WIRING.encode() + b'"></script>')
 
 
 class NoCacheHandler(SimpleHTTPRequestHandler):
@@ -98,9 +100,10 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
         path = self.translate_path(self.path)
 
         # HTML is always served injected (never from a compressed sidecar):
-        # the shim script tag is inserted right after <head> — on cabinets with
-        # scrambled-raw panels only (INJECT_SHIM; see panel-wiring.conf).
-        if INJECT_SHIM and path.endswith(".html") and os.path.isfile(path):
+        # the gamepad shim is inserted right after <head>. The data-wiring
+        # attribute tells it whether to remap the panels; it always filters
+        # the unused Joy-Cons.
+        if path.lower().endswith(".html") and os.path.isfile(path):
             try:
                 with open(path, "rb") as f:
                     html = f.read()

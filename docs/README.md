@@ -30,7 +30,7 @@ apart by name:
 | Board serial (`/proc/device-tree/serial-number`) | `NXO-2EDABE7E-30080F` | `NXO-30D61FFC-30020F` |
 | WiFi MAC (`/sys/class/net/wlp1s0/address`) | `98:b6:e9:25:41:83` | `98:b6:e9:29:e0:05` |
 | WiFi IP (static, set 2026-10-16) | `192.168.50.219` | `192.168.50.75` |
-| Panels (both docks since 2026-10-16) | 2× DragonRise encoders (USB `0079:0006`) on the dock hub; raw button order **scrambled** — remapped by the in-page web shim | 2× DragonRise encoders on the dock hub; raw button order **standard** — no shim (`panel-wiring.conf` = `standard`) |
+| Panels (both docks since 2026-10-16) | 2× DragonRise encoders (USB `0079:0006`) on the dock hub; raw button order **scrambled** — remapped by the in-page web shim | 2× DragonRise encoders on the dock hub; raw button order **standard** — shim is still injected but does not remap (`panel-wiring.conf` = `standard`) |
 
 The old way to tell the units apart was the presence of panels; since
 2026-10-16 both cabinets have their two panels connected. What still differs
@@ -145,8 +145,8 @@ known_hosts entry from one unit fails verification for the other.
 | `scripts/launch-es.sh` | `~/scripts/launch-es.sh` | Launch ES in kiosk mode (Konami code unlocks admin UI) |
 | `scripts/uimode-watcher.py` | `~/scripts/uimode-watcher.py` | Forces ES restart on Konami unlock so the RetroPie menu reappears |
 | `scripts/launch-web-game.sh` | `~/scripts/launch-web-game.sh` | Launch a web game in Chromium kiosk |
-| `scripts/webgame-server.py` | `~/scripts/webgame-server.py` | Per-game HTTP server (started by `launch-web-game.sh`): no-store, COOP/COEP, `.wasm` MIME, `.br`/`.gz` sidecar serving; injects the arcade pad shim into every HTML page on scrambled-wiring cabinets (see `panel-wiring.conf` below) |
-| `scripts/arcade-pad-shim.js` | `~/scripts/arcade-pad-shim.js` | In-page remap of the arcade panels' buttons to standard Gamepad API indices (served/injected by `webgame-server.py`) |
+| `scripts/webgame-server.py` | `~/scripts/webgame-server.py` | Per-game HTTP server (started by `launch-web-game.sh`): no-store, COOP/COEP, `.wasm` MIME, `.br`/`.gz` sidecar serving; injects the gamepad shim into every HTML page (see `panel-wiring.conf` below) |
+| `scripts/arcade-pad-shim.js` | `~/scripts/arcade-pad-shim.js` | In-page gamepad shim: remaps arcade panel buttons on scrambled-wiring cabinets and hides the unused Combined Joy-Cons from the page (served/injected by `webgame-server.py`) |
 | `scripts/exit-server.py` | `~/scripts/exit-server.py` | HTTP on `:8123`; powers in-game Quit buttons (`/exit`) |
 | `scripts/exit-to-es.sh` | `~/scripts/exit-to-es.sh` | Kill Chromium + relaunch ES |
 | `scripts/gamepad-bridge.py` | `~/scripts/gamepad-bridge.py` | Joy-Con → keyboard bridge + Start+Select force-quit + Start+Select+B panic reboot; also watches the arcade panels passively (no grab) for the same combos, with panel button codes selected by `panel-wiring.conf` |
@@ -177,7 +177,7 @@ known_hosts entry from one unit fails verification for the other.
 
 | File | Purpose |
 |---|---|
-| `~/scripts/panel-wiring.conf` | One word selecting the panels' raw button order: `standard` on the software-mode cabinet (pads are already standard-ordered — the shim is **not** injected); the file is **absent** on the hardware-mode cabinet, which keeps the default `scrambled` (shim remaps). Read by `webgame-server.py` and `gamepad-bridge.py`; see [Multi-player arcade panels](multi-controller-panels.md) §13 |
+| `~/scripts/panel-wiring.conf` | One word selecting the panels' raw button order: `standard` on the software-mode cabinet (pads are already standard-ordered — the shim is injected but does not remap); the file is **absent** on the hardware-mode cabinet, which keeps the default `scrambled` (shim remaps). Read by `webgame-server.py` and `gamepad-bridge.py`; see [Multi-player arcade panels](multi-controller-panels.md) §13 |
 
 ## Quick reference
 
@@ -198,7 +198,9 @@ known_hosts entry from one unit fails verification for the other.
 - **Manual sync fallback:** edit `config/itch-games.yaml`, run
   `~/scripts/sync-itch-games.sh --restart-es` on the Switch.
 - **Controls in games:** the Joy-Cons are read by `gamepad-bridge.py` and
-  injected as keyboard keys (D-pad → arrows, A → Space, B → R). See
+  injected as keyboard keys (D-pad → arrows, A → Space, B → R). The page shim
+  hides the unused Joy-Con gamepad, so Unity games do not log a device-creation
+  error or open their development console. See
   [Web Games setup](web-games-setup.md) for the mapping. The arcade panels
   reach games as standard-mapped controllers — remapped in-page by the shim on
   the hardware cabinet, already standard-ordered on the software cabinet.

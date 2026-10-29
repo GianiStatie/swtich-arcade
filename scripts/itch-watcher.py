@@ -240,9 +240,10 @@ def collection_games(collection_id, key):
     """All games in the collection: {game_id: {title, url}}"""
     games = {}
     page = 1
+    per_page = 500
     while True:
-        url = "%s/collections/%d/collection-games?page=%d" % (
-            API_BASE, collection_id, page)
+        url = "%s/collections/%d/collection-games?page=%d&per_page=%d" % (
+            API_BASE, collection_id, page, per_page)
         data = http_json(url, key)
         batch = data.get("collection_games", [])
         if not batch:
@@ -254,8 +255,8 @@ def collection_games(collection_id, key):
                     "title": g.get("title") or ("Game %d" % g["id"]),
                     "url": g.get("url", ""),
                 }
-        if len(batch) < len(games) and page > 1:
-            break  # safety; collections are small here
+        if len(batch) < int(data.get("per_page") or per_page):
+            break
         page += 1
         if page > 50:
             break

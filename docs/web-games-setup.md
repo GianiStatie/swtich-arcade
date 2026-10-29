@@ -438,10 +438,10 @@ Notes:
 
 ## Gamepad input (the bridge)
 
-Chromium's W3C Gamepad API **does** expose the Combined Joy-Cons in the real
-kiosk browser, but its button indices don't match what Godot web builds expect
-(the D-pad lands on indices 14-17, not the standard 12-15), so games see
-phantom directions. The megascript's X joystick driver
+Chromium's W3C Gamepad API can expose the Combined Joy-Cons in the real kiosk
+browser, and its button indices don't match what Godot web builds expect (the
+D-pad lands on indices 14-17, not the standard 12-15), so games see phantom
+directions. The megascript's X joystick driver
 (`xserver-xorg-input-joystick`) *also* translates them to keyboard/mouse, but it
 is a desktop tool whose "accelerated" axis mapping produces repeated keys and
 bleeds analog-stick drift into phantom directions. Either path alone is messy;
@@ -451,15 +451,19 @@ Instead, `gamepad-bridge.py` reads the Joy-Cons directly via evdev
 (`/dev/input/event8`) and injects clean keyboard events through `/dev/uinput`.
 It replaces both the X joystick driver and the old `quit-watcher.py`. It starts
 from the Openbox autostart (idempotently) and is also started as a fallback by
-`launch-web-game.sh`.
+`launch-web-game.sh`. The injected page shim hides the Combined Joy-Cons from
+the Gamepad API, so Unity's Input System does not try to create an unsupported
+device and open its native development console.
 
-**Exclusive grab:** while Chromium is running, the bridge holds an `EVIOCGRAB`
-on event8, which blocks *every other reader* — Chromium's Gamepad API and
-libinput — from receiving Joy-Con events. This makes the bridge's keyboard
-injection the single, clean input path (no double input). When the game exits,
-the bridge releases the grab and the Joy-Cons return to EmulationStation (which
-uses SDL). An X config (`10-ignore-joycons.conf`) also tells libinput to ignore
-the Joy-Cons entirely, so they never become a pointer/keyboard in X.
+**Grab and page filter:** while Chromium is running, the bridge holds an
+`EVIOCGRAB` on event8, which stops other evdev readers. Chromium can still
+enumerate the paired `js` node, so the grab alone does not keep the Joy-Cons
+out of a page; the shim's `getGamepads()`/`gamepadconnected` filter does that.
+This makes the bridge's keyboard injection the single, clean input path (no
+double input). When the game exits, the bridge releases the grab and the
+Joy-Cons return to EmulationStation (which uses SDL). An X config
+(`10-ignore-joycons.conf`) also tells libinput to ignore the Joy-Cons entirely,
+so they never become a pointer/keyboard in X.
 
 Mapping table (edit the `BTN_TO_KEY` dict in the script):
 

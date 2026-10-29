@@ -262,12 +262,14 @@ input in the browser.
 
 **Fix (current):** The Joy-Cons are read by `gamepad-bridge.py` (evdev →
 uinput), which injects clean keyboard keys **and** holds an exclusive grab
-(`EVIOCGRAB`) on the controller while Chromium runs. That grab blocks
-Chromium's Gamepad API and libinput from reading the Joy-Cons, so the bridge's
-keyboard injection is the single input path. The X joystick driver is
-**disabled** and must stay disabled; an X config (`10-ignore-joycons.conf`)
-also tells libinput to ignore the Joy-Cons as a pointer/keyboard. The two
-megascript configs are renamed to `.disabled`:
+(`EVIOCGRAB`) on the controller while Chromium runs. That grab stops other
+evdev readers, but Chromium can still enumerate the paired `js` node; the page
+shim therefore hides the Combined Joy-Cons from `navigator.getGamepads()` and
+the `gamepadconnected` event. This makes the bridge's keyboard injection the
+single input path. The X joystick driver is **disabled** and must stay
+disabled; an X config (`10-ignore-joycons.conf`) also tells libinput to ignore
+the Joy-Cons as a pointer/keyboard. The two megascript configs are renamed to
+`.disabled`:
 ```bash
 echo 1234 | sudo -S mv /usr/share/X11/xorg.conf.d/50-joystick.conf \
   /usr/share/X11/xorg.conf.d/50-joystick.conf.disabled
@@ -284,6 +286,23 @@ pgrep -a -f gamepad-bridge.py
 while the bridge is in use — they would double-inject every button press. To
 use desktop-mode joystick-as-mouse, stop the bridge and rename the files back
 to `.conf`, then restart sddm.
+
+**Unity error / on-screen developer console.** A Unity development build may
+log:
+
+```text
+Could not create a device for 'Nintendo Switch Combined Joy-Cons' (exception: ...)
+```
+
+That error opens Unity's native on-screen Developer Console. It is not Chrome's
+DevTools console and cannot be hidden with page CSS. `webgame-server.py` injects
+the gamepad shim into every HTML page, which hides the unused Combined Joy-Cons
+before Unity sees them, so this error no longer occurs. The shim is applied at
+serve time, so it also covers future game uploads and watcher re-downloads.
+
+This only suppresses that specific error. If a Unity development build logs a
+different error, its native console can still open; use a release/non-development
+build to remove it entirely.
 
 ### Verifying the bridge mapping
 
