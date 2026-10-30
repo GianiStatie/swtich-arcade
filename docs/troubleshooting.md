@@ -46,6 +46,45 @@ first launch after a cache reset recompiles shaders once.
 du -sh ~/.cache/arcade/chrome_profile/ShaderCache
 ```
 
+## Godot stuck on the loading bar (WASM LinkError)
+
+**Symptom:** A Godot web game shows the Godot splash with the progress bar full,
+but the game never renders. Chromium's console has:
+
+```text
+Uncaught (in promise) LinkError: WebAssembly.instantiate():
+Import #312 "env" "memory": memory import must be a WebAssembly.Memory object
+```
+
+**Cause:** Godot's PWA service worker is registered at the *origin root* and
+caches generic filenames (`index.html`, `index.js`, `index.wasm`, `index.pck`).
+When every game shares one origin (`127.0.0.1:8124`), the service worker from a
+previous Godot game serves its cached files to the next game. The JS glue and
+the WASM then come from different builds (threaded vs. non-threaded), which is
+exactly the memory-import LinkError above. The loading bar is the HTML loader
+finishing; the engine never starts.
+
+This is *not* caused by the gamepad shim or the Joy-Con hiding: the shim only
+wraps `navigator.getGamepads()` / `gamepadconnected`, and serving the same game
+on a different port (different origin) starts normally.
+
+**Fix:** `launch-web-game.sh` now gives each game a stable per-game port derived
+from its folder name (range `8200-8699`), so each game has its own origin,
+service worker and CacheStorage inside the shared Chromium profile.
+`exit-to-es.sh` kills whichever per-game server is running.
+
+**If an old shared-port cache is still around:** unregister the
+`127.0.0.1:8124` service worker and delete its `shaman-arena-rem-sw-cache-*`
+cache. `UnityCache_*` caches are separate and can stay.
+
+**Diagnose:**
+```bash
+# The console error appears when Chromium is started with --enable-logging=stderr
+grep -i 'LinkError\|WebAssembly.instantiate' ~/.xsession-errors
+# Per-game ports in use (only one at a time)
+ss -ltnp | grep -E '82[0-9][0-9]'
+```
+
 ## Game doesn't appear in EmulationStation
 
 - A system must have at least one game in its `path` directory or ES ignores it.

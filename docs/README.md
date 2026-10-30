@@ -144,7 +144,7 @@ known_hosts entry from one unit fails verification for the other.
 |---|---|---|
 | `scripts/launch-es.sh` | `~/scripts/launch-es.sh` | Launch ES in kiosk mode (Konami code unlocks admin UI) |
 | `scripts/uimode-watcher.py` | `~/scripts/uimode-watcher.py` | Forces ES restart on Konami unlock so the RetroPie menu reappears |
-| `scripts/launch-web-game.sh` | `~/scripts/launch-web-game.sh` | Launch a web game in Chromium kiosk |
+| `scripts/launch-web-game.sh` | `~/scripts/launch-web-game.sh` | Launch a web game in Chromium kiosk; each game gets a stable per-game port so Godot service workers/caches stay isolated |
 | `scripts/webgame-server.py` | `~/scripts/webgame-server.py` | Per-game HTTP server (started by `launch-web-game.sh`): no-store, COOP/COEP, `.wasm` MIME, `.br`/`.gz` sidecar serving; injects the gamepad shim into every HTML page (see `panel-wiring.conf` below) |
 | `scripts/arcade-pad-shim.js` | `~/scripts/arcade-pad-shim.js` | In-page gamepad shim: remaps arcade panel buttons on scrambled-wiring cabinets and hides the unused Combined Joy-Cons from the page (served/injected by `webgame-server.py`) |
 | `scripts/exit-server.py` | `~/scripts/exit-server.py` | HTTP on `:8123`; powers in-game Quit buttons (`/exit`) |

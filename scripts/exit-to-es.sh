@@ -12,10 +12,11 @@ if [[ "$(id -un)" != "tagap" ]]; then
 fi
 
 # Kill the local web-game HTTP server (launched by launch-web-game.sh) so it
-# doesn't hold the game directory or leave a stale port open.
-pkill -f "webgame-server.py 8124" 2>/dev/null || true
-pkill -f "http.server.*8124" 2>/dev/null || true
-pkill -f "busybox httpd -f -p 8124" 2>/dev/null || true
+# doesn't hold the game directory or leave a stale port open. The port is
+# per-game now, so match the server by name rather than a fixed number.
+pkill -f "[w]ebgame-server.py" 2>/dev/null || true
+pkill -f "[-]m http.server" 2>/dev/null || true
+pkill -f "[b]usybox httpd -f -p" 2>/dev/null || true
 
 # Force-kill Chromium (kiosk instance). Using -9 (SIGKILL) avoids the graceful
 # window-close that can trigger an "Exit Openbox?" prompt. The real binary is

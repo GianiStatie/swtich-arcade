@@ -205,14 +205,16 @@ ssh switch-hw 'cat /tmp/padlog.txt'
 ```
 
 **Footgun — stale servers hijack the game port (hit for real, 2026-10-16).**
-Forgetting to kill a manually started `webgame-server.py` leaves port 8124
-occupied. `launch-web-game.sh` then starts a server that cannot bind
-(`Address already in use` in `/tmp/webgame_server.log`), and the kiosk is
-answered by the stale server — so *every* launched game shows that server's
-page (in our case the tester, looking like a controller debug screen). Guards
-added: `launch-web-game.sh` now reaps stale servers on its port before
-starting and fails loudly if its own server dies; `exit-to-es.sh` also kills
-`webgame-server.py`. Still: always kill manual test servers when done.
+Forgetting to kill a manually started `webgame-server.py` leaves its port
+occupied. Before per-game ports, every game used 8124, so `launch-web-game.sh`
+then started a server that could not bind (`Address already in use` in
+`/tmp/webgame_server.log`), and the kiosk was answered by the stale server — so
+*every* launched game showed that server's page (in our case the tester,
+looking like a controller debug screen). Guards added: `launch-web-game.sh`
+now reaps stale servers on its port before starting and fails loudly if its
+own server dies; `exit-to-es.sh` also kills `webgame-server.py`. Games now get
+a stable per-game port (to isolate Godot service workers), but manual test
+servers should still be killed when done.
 
 Also used (ad-hoc, not saved): a raw evdev event logger to capture presses
 (`EV_KEY` value 1 with `dev.phys`), and `tools/padtest`-style readers on the

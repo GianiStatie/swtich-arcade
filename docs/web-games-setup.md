@@ -261,6 +261,10 @@ chromium-browser \
   perceived hang (the cause of WebGL context loss on the Tegra X1).
 - `--user-data-dir` / `--disk-cache-dir` point at `~/.cache/arcade/` so the
   shader cache and wasm persist across reboots and are shared across all games.
+- `${PORT}` is a stable per-game port (derived from the game folder name,
+  `8200-8699`), not a single shared `8124`. This gives each game its own origin,
+  so Godot's PWA service worker cannot serve one game's `index.js`/`index.wasm`
+  to another. See [Troubleshooting](troubleshooting.md#godot-stuck-on-the-loading-bar-wasm-linkerror).
 
 ### Hiding the cursor (whole session)
 
@@ -525,6 +529,6 @@ browser process → renderer → JS), which is unavoidable for injected keys.
 
 ### `exit-to-es.sh`
 
-Kills the http server (port 8124) + force-kills Chromium kiosk, then relaunches
-EmulationStation if it died. The gamepad bridge's Start+Select and the
-exit-server both funnel through this script.
+Kills the game's HTTP server (whatever per-game port it is on) + force-kills
+Chromium kiosk, then relaunches EmulationStation if it died. The gamepad
+bridge's Start+Select and the exit-server both funnel through this script.

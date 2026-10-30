@@ -34,7 +34,21 @@ fi
 #
 # webgame-server.py sends no-store cache headers; plain `http.server` does not,
 # and Chromium's heuristic caching then serves stale pck/wasm after updates.
-PORT="${WEBGAME_PORT:-8124}"
+#
+# Each game gets its own origin (port), not just its own directory. Godot's
+# PWA service worker is registered at the origin root and caches generic names
+# (index.html/index.js/index.wasm/index.pck). On a shared port, one game's
+# service worker serves its cached files to the next game, so the JS glue and
+# the wasm/pck come from different builds (e.g. LinkError: import "env"
+# "memory" must be a WebAssembly.Memory object). A stable per-game port keeps
+# each service worker and CacheStorage isolated inside the shared profile.
+if [[ -n "${WEBGAME_PORT:-}" ]]; then
+  PORT="${WEBGAME_PORT}"
+else
+  GAME_NAME="$(basename "${GAME_DIR%/}")"
+  GAME_HASH="$(printf '%s' "${GAME_NAME}" | cksum | awk '{print $1}')"
+  PORT=$(( 8200 + GAME_HASH % 500 ))
+fi
 if [[ -x "${GAME_DIR%/*}/../scripts/webgame-server.py" ]]; then
   SERVER_SCRIPT="${GAME_DIR%/*}/../scripts/webgame-server.py"
 elif [[ -x "/home/tagap/scripts/webgame-server.py" ]]; then
