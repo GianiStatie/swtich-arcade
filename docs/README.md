@@ -155,6 +155,7 @@ known_hosts entry from one unit fails verification for the other.
 | `scripts/itch-watcher.py` | `~/scripts/itch-watcher.py` | Poll the itch collection; auto-install updates / prune / restart ES |
 | `config/systemd/user/itch-watcher.service` | `~/.config/systemd/user/itch-watcher.service` | User service running the watcher (enabled + linger) |
 | `scripts/arcade-perf-mode.sh` | `~/scripts/arcade-perf-mode.sh` | nvpmodel + CPU governor to performance |
+| `config/systemd/system/arcade-perf-mode.service` | `/etc/systemd/system/arcade-perf-mode.service` | Applies perf mode at boot as root, so it no longer depends on a passwordless sudo prompt |
 | `config/itch-games.yaml` | `~/arcade_games/itch-games.yaml` | List of games to pull |
 | `config/openbox-autostart` | `~/.config/openbox/autostart` | Openbox session autostart (stale-session reaper + perf + exit-server + gamepad-bridge + uimode-watcher + HDMI volume + ES via launch-es.sh) |
 | `config/10-ignore-joycons.conf` | `/etc/X11/xorg.conf.d/10-ignore-joycons.conf` | libinput: ignore Joy-Cons as X pointer/keyboard (bridge handles input) |

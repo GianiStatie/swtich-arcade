@@ -1,0 +1,12 @@
+[Unit]
+Description=Arcade performance mode (Perf_All + performance CPU governor)
+After=systemd-modules-load.service
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/tagap/scripts/arcade-perf-mode.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

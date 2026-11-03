@@ -26,7 +26,8 @@ pkill -9 -f "chromium.org/chromium/chrome.*--kiosk" 2>/dev/null || true
 pkill -f "scripts/webgame-server.py" 2>/dev/null || true
 sleep 1
 
-/home/tagap/scripts/arcade-perf-mode.sh &
+# arcade-perf-mode.sh is applied at boot by the systemd service
+# (config/systemd/system/arcade-perf-mode.service), not from this session.
 start_once exit-server.py python3 -u
 start_once gamepad-bridge.py python3 -u
 start_once uimode-watcher.py python3 -u

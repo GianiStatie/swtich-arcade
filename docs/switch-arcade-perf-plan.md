@@ -87,8 +87,10 @@ All items must gracefully fall back to today's behavior if anything fails.
 ### Already done
 
 - `nvpmodel -m 5` (Perf All, no overclock) + CPU governor pinned to `performance`
-  (`scripts/arcade-perf-mode.sh`). Note: mode 6 (overclock) hard-froze the system
-  and stays off.
+  (`scripts/arcade-perf-mode.sh`), applied at boot as root by
+  `config/systemd/system/arcade-perf-mode.service` (the Openbox autostart could
+  not run `sudo` non-interactively). Note: mode 6 (overclock) hard-froze the
+  system and stays off.
 - Chromium kiosk with persistent profile/cache (`~/.cache/arcade/`), so shader and
   WASM caches survive reboots (`launch-web-game.sh`).
 - `--disable-gpu-watchdog`, `--use-angle=gl`, `--enable-gpu-rasterization`,

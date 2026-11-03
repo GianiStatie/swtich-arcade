@@ -46,6 +46,25 @@ first launch after a cache reset recompiles shaders once.
 du -sh ~/.cache/arcade/chrome_profile/ShaderCache
 ```
 
+## Cabinet runs in Handheld power mode (low CPU/GPU clocks)
+
+**Symptom:** Games run slower than expected; `nvpmodel -q` reports
+`Handheld`, CPU max is 1.428 GHz and GPU max is 460.8 MHz.
+
+**Cause:** `arcade-perf-mode.sh` needs root. When it was started from the
+Openbox autostart it called `sudo` without a password and silently failed, so
+the cabinet stayed in the default Handheld profile.
+
+**Fix (current):** `arcade-perf-mode.service` runs the script as root at boot.
+Verify:
+```bash
+systemctl status arcade-perf-mode.service
+nvpmodel -q | grep "Power Mode"                            # Perf_All
+cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor  # performance
+```
+After changing the unit: `sudo systemctl daemon-reload && sudo systemctl
+enable --now arcade-perf-mode.service`.
+
 ## Godot stuck on the loading bar (WASM LinkError)
 
 **Symptom:** A Godot web game shows the Godot splash with the progress bar full,
