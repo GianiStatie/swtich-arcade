@@ -381,6 +381,11 @@ persisted on this image). Run one poll by hand with
   account must own (or follow/curate) the collection.
 - Legacy v1 endpoints handle uploads+downloads for free third-party games;
   `api.itch.io` (Bearer) is only used for the collection listing.
+- Build size is the contributor's responsibility: the watcher installs the
+  zip as-is. It serves `.br`/`.gz` sidecars if present, but it does not
+  re-encode audio/textures or strip the engine. See
+  [Web build size](web-build-size.md) for what can and cannot be done after
+  pulling.
 
 ## Kiosk mode + admin access (the Konami code)
 

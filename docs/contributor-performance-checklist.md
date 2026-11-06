@@ -43,7 +43,7 @@ Still ship a quit button, though — section 5.
 - [ ] **Few, bigger sprite atlases** instead of lots of loose images. And never base64-embed big assets into the HTML.
 - [ ] **Hide level switches behind a cover.** Loading, tearing down and rebuilding a level (terrain, objects, secrets, pathfinding) all happen on the main thread — threads don't parallelize it, so an uncovered switch is a visible multi-frame freeze. We measured this on the Tegra. Dragon Jump runs in-place switches behind the transition wipe and it's smooth.
 - [ ] **Test the way it's played:** 720p canvas, keyboard only, no mouse.
-- [ ] Don't panic about the **first launch after an update being slow** — shaders and the WASM code cache start cold. The arcade pre-warms new games after installing them, so players normally never see that run.
+- [ ] Don't panic about the **first launch after an update being slow** — shaders and the WASM code cache start cold. Later launches reuse the cache; a slow first load is still a useful signal.
 
 ## 4. Engine-specific settings
 
@@ -70,6 +70,7 @@ Still ship a quit button, though — section 5.
   - The **Minimize Web Build** addon (Asset Library, Godot 4.3+) recompresses `.pck`/`.wasm`. The arcade server serves precompressed `.br`/`.gz` sidecars straight from your zip.
   - If you ship sidecars, compress `.wasm` and `.js` — that's where the money is (Dragon Jump's wasm: 25.8 MB → 4.3 MB). Don't bother with an encrypted `.pck`: encryption makes it incompressible, ours grew by 12 bytes.
   - Advanced: a custom template with unused engine modules stripped cuts the wasm dramatically (Godot's "Optimizing a build for size" doc).
+  - For measured examples, what the cabinet can/cannot do after pulling, and why WAV audio is the biggest trap, see [Web build size](web-build-size.md).
 - [ ] **Branch on feature tags for heavy effects**, but keep both paths working:
   ```gdscript
   if OS.has_feature("web"):
@@ -161,6 +162,7 @@ If you're skimming, this is the whole page:
 - [ ] Keyboard controls: arrows, Space, R, Esc, Tab.
 - [ ] ≤720p internal render; no MSAA/shadows/post; nothing allocated per frame; FPS capped.
 - [ ] Level switches covered; non-game files out of the build.
+- [ ] Audio is Ogg Vorbis (64–96 kbps), not WAV/PCM; ship `.wasm.br`/`.js.br` sidecars.
 - [ ] Godot: Compatibility renderer + Threads ON (keep the nothreads template around); Unity: stripping High + Brotli (no fallback) + Data Caching + multithreading.
 - [ ] Godot: VRAM compression For Desktop; Unity: WebGL2 only.
 - [ ] A quit that hits `127.0.0.1:8123/exit` (Start + Select covers you anyway).

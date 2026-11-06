@@ -15,6 +15,7 @@ kiosk, force-quit mechanism).
 - [Performance plan](switch-arcade-perf-plan.md) — the three tiers: game build, arcade launch, native ARM.
 - [Native ARM tier](native-arm-tier.md) — running Godot web exports natively (design).
 - [Contributor performance checklist](contributor-performance-checklist.md) — shareable guidance for people shipping games.
+- [Web build size](web-build-size.md) — Dragon Jump vs Töténkerkăr measurements, what the cabinet can and cannot optimize after pulling, and the export-time size checklist.
 - [Multi-player arcade panels](multi-controller-panels.md) — design/handoff for the two added USB-encoder panels (P1/P2 as standard gamepads); **implemented** — panels are remapped for web games by a shim injected into served pages.
 - [Panel input investigation](panel-input-investigation.md) — field notes from fixing the panel inputs: what was tried (uinput, udev, shims), what failed and why, environment quirks, and the reusable test harness in `tools/padtest/`.
 - [Arcade contract simulator](../docker/README.md) — Docker image to test a web build against the cabinet's software contract, and a library mode that syncs the itch collection into a browsable game menu (not a hardware emulator). How to run it: [`docker/docs/RUNNING.md`](../docker/docs/RUNNING.md).
